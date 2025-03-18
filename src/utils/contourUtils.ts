@@ -14,6 +14,40 @@ export interface ContourData {
   closed: boolean;
 }
 
+// Preprocessing steps for contour detection - used in Tutorial.tsx
+export const preprocessingSteps = [
+  {
+    id: 'grayscale',
+    name: 'Grayscale Conversion',
+    description: 'Converting the image to grayscale simplifies processing by reducing the image from three color channels to one intensity channel.'
+  },
+  {
+    id: 'blur',
+    name: 'Gaussian Blur',
+    description: 'Applying a slight blur helps to reduce noise and details that might interfere with contour detection.'
+  },
+  {
+    id: 'threshold',
+    name: 'Thresholding',
+    description: 'Converting the image to binary (black and white) by applying a threshold makes it easier to identify object boundaries.'
+  },
+  {
+    id: 'edges',
+    name: 'Edge Detection',
+    description: 'Algorithms like Canny detect edges by looking for abrupt changes in pixel intensity across the image.'
+  },
+  {
+    id: 'contours',
+    name: 'Contour Extraction',
+    description: 'Finding continuous curves that follow the boundaries identified in the previous steps.'
+  },
+  {
+    id: 'filtering',
+    name: 'Contour Filtering',
+    description: 'Removing unwanted contours based on size, shape, or other properties to focus on meaningful objects.'
+  }
+];
+
 // Convert canvas data to grayscale
 export const convertToGrayscale = (
   imageData: ImageData
