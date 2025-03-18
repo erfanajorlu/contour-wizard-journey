@@ -5,8 +5,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Image as ImageIcon, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
-import { findContours, drawContours, convertToGrayscale, applyThreshold } from '@/utils/contourUtils';
+import { Upload, Image as ImageIcon, RefreshCw, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
+import { findContours, drawContours, convertToGrayscale, applyThreshold, sampleImages } from '@/utils/contourUtils';
+import { useToast } from "@/hooks/use-toast";
+
+// Add a global type for the window object to include our custom property
+declare global {
+  interface Window {
+    selectedSampleImage?: keyof typeof sampleImages;
+  }
+}
 
 const ImageProcessor = () => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -15,6 +23,7 @@ const ImageProcessor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const { toast } = useToast();
   
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
   const grayscaleCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,7 +44,19 @@ const ImageProcessor = () => {
     
     const reader = new FileReader();
     reader.onload = (event) => {
-      setImageUrl(event.target?.result as string);
+      const result = event.target?.result as string;
+      setImageUrl(result);
+      toast({
+        title: "Image uploaded",
+        description: "Processing your image with contour detection algorithm",
+      });
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your image",
+        variant: "destructive",
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -44,6 +65,37 @@ const ImageProcessor = () => {
   const handleReset = () => {
     setCurrentStep(0);
   };
+  
+  // Load sample image
+  const loadSampleImage = (sampleKey: keyof typeof sampleImages) => {
+    setImageUrl(sampleImages[sampleKey]);
+    toast({
+      title: "Sample image loaded",
+      description: "Processing sample image with contour detection algorithm",
+    });
+  };
+  
+  // Listen for sample image selection from gallery
+  useEffect(() => {
+    const handleSampleImageSelected = (e: Event) => {
+      const customEvent = e as CustomEvent<{ sampleKey: keyof typeof sampleImages }>;
+      if (customEvent.detail?.sampleKey) {
+        loadSampleImage(customEvent.detail.sampleKey);
+      }
+    };
+    
+    document.addEventListener('sampleImageSelected', handleSampleImageSelected as EventListener);
+    
+    // Check if there's a sample image selected from the gallery via the window object
+    if (window.selectedSampleImage) {
+      loadSampleImage(window.selectedSampleImage);
+      window.selectedSampleImage = undefined; // Clear it after use
+    }
+    
+    return () => {
+      document.removeEventListener('sampleImageSelected', handleSampleImageSelected as EventListener);
+    };
+  }, []);
   
   // Process image step by step
   const processImage = () => {
@@ -69,6 +121,11 @@ const ImageProcessor = () => {
     
     if (!originalCtx || !grayscaleCtx || !thresholdCtx || !contourCtx) {
       setIsProcessing(false);
+      toast({
+        title: "Processing error",
+        description: "Could not get canvas context",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -141,8 +198,22 @@ const ImageProcessor = () => {
       scaledHeight
     );
     
-    const contours = findContours(thresholdData, originalCanvas.width, originalCanvas.height);
-    drawContours(contourCtx, contours);
+    try {
+      const contours = findContours(thresholdData, originalCanvas.width, originalCanvas.height);
+      drawContours(contourCtx, contours);
+      
+      toast({
+        title: "Processing complete",
+        description: `Found ${contours.length} contours in the image`,
+      });
+    } catch (error) {
+      console.error("Error finding contours:", error);
+      toast({
+        title: "Contour detection error",
+        description: "There was an error processing contours",
+        variant: "destructive",
+      });
+    }
     
     setIsProcessing(false);
   };
@@ -156,6 +227,13 @@ const ImageProcessor = () => {
     img.onload = () => {
       setOriginalImage(img);
       setCurrentStep(0);
+    };
+    img.onerror = () => {
+      toast({
+        title: "Image loading error",
+        description: "Failed to load the image",
+        variant: "destructive",
+      });
     };
   }, [imageUrl]);
   
@@ -221,7 +299,7 @@ const ImageProcessor = () => {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.4 }}
           >
-            Upload your own image and see contour detection in action. Follow the step-by-step process to understand how the algorithm works.
+            Upload your own image or use our sample images to see contour detection in action. Follow the step-by-step process to understand how the algorithm works.
           </motion.p>
         </div>
         
@@ -254,6 +332,43 @@ const ImageProcessor = () => {
                   />
                 </label>
               </CardContent>
+              <CardFooter className="flex flex-col space-y-4">
+                <p className="text-sm text-muted-foreground">Or try a sample image:</p>
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => loadSampleImage('basicShapes')}
+                    className="w-full"
+                  >
+                    Basic Shapes
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => loadSampleImage('householdObjects')}
+                    className="w-full"
+                  >
+                    Household Objects
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => loadSampleImage('naturalScenes')}
+                    className="w-full"
+                  >
+                    Natural Scenes
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => loadSampleImage('medicalImaging')}
+                    className="w-full"
+                  >
+                    Medical Imaging
+                  </Button>
+                </div>
+              </CardFooter>
             </Card>
             
             <Card className="glass-card">
@@ -298,6 +413,30 @@ const ImageProcessor = () => {
                   Process Image
                 </Button>
               </CardFooter>
+            </Card>
+            
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>About Contour Detection</CardTitle>
+                <CardDescription>
+                  How the algorithm works
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-sm space-y-4">
+                <p>
+                  Contour detection is a technique used to identify the boundaries of objects in an image. The process typically involves:
+                </p>
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Converting the image to grayscale to simplify processing</li>
+                  <li>Applying a threshold to create a binary (black and white) image</li>
+                  <li>Tracing the boundaries between white and black regions</li>
+                  <li>Storing these boundaries as contours</li>
+                </ol>
+                <p className="flex items-start gap-2 text-xs mt-4">
+                  <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  <span>This is a simplified educational implementation. Professional applications often use more sophisticated algorithms like Canny edge detection.</span>
+                </p>
+              </CardContent>
             </Card>
           </div>
           
@@ -376,7 +515,22 @@ const ImageProcessor = () => {
                     {!originalImage && (
                       <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground">
                         <ImageIcon className="w-12 h-12 opacity-20" />
-                        <p>Upload an image to begin</p>
+                        <p>Upload an image or select a sample to begin</p>
+                        <div className="flex flex-wrap gap-2 justify-center mt-2">
+                          {Object.keys(sampleImages).map((key) => (
+                            <Button 
+                              key={key} 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => loadSampleImage(key as keyof typeof sampleImages)}
+                            >
+                              {key === 'basicShapes' ? 'Basic Shapes' :
+                               key === 'householdObjects' ? 'Household Objects' :
+                               key === 'naturalScenes' ? 'Natural Scenes' :
+                               'Medical Imaging'}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

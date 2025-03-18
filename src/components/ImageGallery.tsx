@@ -5,11 +5,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { sampleDatasets } from '@/utils/contourUtils';
-import { Layers, Eye, Download } from 'lucide-react';
+import { sampleDatasets, sampleImages } from '@/utils/contourUtils';
+import { Layers, Eye, Download, ArrowRight } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
 
 const ImageGallery = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const { toast } = useToast();
   
   const categories = [
     { id: 'all', name: 'All Datasets' },
@@ -30,6 +32,50 @@ const ImageGallery = () => {
     return sampleDatasets.filter(
       dataset => complexityMap[category]?.includes(dataset.complexity)
     );
+  };
+  
+  const handleTryImage = (datasetId: string) => {
+    let sampleKey: keyof typeof sampleImages;
+    
+    switch (datasetId) {
+      case 'basic-shapes':
+        sampleKey = 'basicShapes';
+        break;
+      case 'household-objects':
+        sampleKey = 'householdObjects';
+        break;
+      case 'natural-scenes':
+        sampleKey = 'naturalScenes';
+        break;
+      case 'medical-imaging':
+        sampleKey = 'medicalImaging';
+        break;
+      default:
+        return;
+    }
+    
+    // Find the processor section and scroll to it
+    const processorSection = document.getElementById('processor');
+    if (processorSection) {
+      processorSection.scrollIntoView({ behavior: 'smooth' });
+      
+      // Set a timeout to allow scrolling to complete before showing the toast
+      setTimeout(() => {
+        toast({
+          title: "Sample selected",
+          description: "Scroll down to see the contour detection in action",
+        });
+      }, 1000);
+    }
+    
+    // Set a global variable that ImageProcessor can access
+    window.selectedSampleImage = sampleKey;
+    
+    // Create and dispatch a custom event
+    const event = new CustomEvent('sampleImageSelected', { 
+      detail: { sampleKey }
+    });
+    document.dispatchEvent(event);
   };
   
   const fadeInUpVariant = {
@@ -102,21 +148,31 @@ const ImageGallery = () => {
                   >
                     <Card className="glass-card overflow-hidden h-full flex flex-col group">
                       <div className="relative">
-                        <div 
-                          className="aspect-video w-full overflow-hidden"
-                          style={{ 
-                            backgroundImage: `url(${dataset.imageUrl})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center'
-                          }}
-                        >
+                        <div className="aspect-video w-full overflow-hidden bg-muted">
+                          {dataset.id === 'basic-shapes' && (
+                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.basicShapes})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          )}
+                          {dataset.id === 'household-objects' && (
+                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.householdObjects})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          )}
+                          {dataset.id === 'natural-scenes' && (
+                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.naturalScenes})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          )}
+                          {dataset.id === 'medical-imaging' && (
+                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.medicalImaging})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          )}
                         </div>
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                           <Button 
                             variant="secondary" 
                             size="sm" 
                             className="gap-1"
-                            onClick={() => setSelectedImage(dataset.imageUrl)}
+                            onClick={() => setSelectedImage(
+                              dataset.id === 'basic-shapes' ? sampleImages.basicShapes :
+                              dataset.id === 'household-objects' ? sampleImages.householdObjects :
+                              dataset.id === 'natural-scenes' ? sampleImages.naturalScenes :
+                              sampleImages.medicalImaging
+                            )}
                           >
                             <Eye className="w-4 h-4" />
                             Preview
@@ -147,9 +203,11 @@ const ImageGallery = () => {
                           variant="outline" 
                           size="sm" 
                           className="text-xs w-full gap-1"
+                          onClick={() => handleTryImage(dataset.id)}
                         >
                           <Layers className="w-3.5 h-3.5" />
-                          Explore Dataset
+                          Try This Image
+                          <ArrowRight className="w-3.5 h-3.5 ml-auto" />
                         </Button>
                       </CardFooter>
                     </Card>
@@ -196,9 +254,17 @@ const ImageGallery = () => {
                   variant="outline" 
                   size="sm" 
                   className="text-white border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-sm gap-1"
+                  onClick={() => {
+                    // Just close the modal and scroll to processor
+                    setSelectedImage(null);
+                    const processorSection = document.getElementById('processor');
+                    if (processorSection) {
+                      processorSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
                 >
-                  <Download className="w-4 h-4" />
-                  Download
+                  Try This Image
+                  <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
             </motion.div>
