@@ -5,15 +5,33 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Image as ImageIcon, RefreshCw, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
-import { findContours, drawContours, convertToGrayscale, applyThreshold, sampleImages } from '@/utils/contourUtils';
+import { Upload, Image as ImageIcon, RefreshCw, ZoomIn, ZoomOut, AlertCircle, Cpu } from 'lucide-react';
+import { 
+  findContours, 
+  drawContours, 
+  convertToGrayscale, 
+  applyThreshold, 
+  sampleImages,
+  processImageWithPython,
+  getMedicalSamples,
+  getSampleImage
+} from '@/utils/contourUtils';
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Add a global type for the window object to include our custom property
 declare global {
   interface Window {
     selectedSampleImage?: keyof typeof sampleImages;
   }
+}
+
+interface MedicalSample {
+  id: string;
+  name: string;
+  category: string;
 }
 
 const ImageProcessor = () => {
@@ -23,6 +41,14 @@ const ImageProcessor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [usePython, setUsePython] = useState(true);
+  const [medicalSamples, setMedicalSamples] = useState<MedicalSample[]>([]);
+  const [selectedMedicalSample, setSelectedMedicalSample] = useState<string>('');
+  const [pythonVisualizations, setPythonVisualizations] = useState<{
+    grayscale: string;
+    threshold: string;
+    contour: string;
+  } | null>(null);
   const { toast } = useToast();
   
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,6 +63,28 @@ const ImageProcessor = () => {
     { id: 'contour', name: 'Contour Detection', ref: contourCanvasRef }
   ];
   
+  // Fetch medical samples from Python backend
+  useEffect(() => {
+    if (usePython) {
+      const fetchMedicalSamples = async () => {
+        try {
+          const samples = await getMedicalSamples();
+          setMedicalSamples(samples);
+        } catch (error) {
+          console.error('Failed to fetch medical samples:', error);
+          toast({
+            title: "Python Backend Error",
+            description: "Could not connect to Python backend. Make sure it's running at localhost:5000",
+            variant: "destructive",
+          });
+          setUsePython(false);
+        }
+      };
+      
+      fetchMedicalSamples();
+    }
+  }, [usePython]);
+  
   // Handle file upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -46,9 +94,10 @@ const ImageProcessor = () => {
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setImageUrl(result);
+      setPythonVisualizations(null);
       toast({
         title: "Image uploaded",
-        description: "Processing your image with contour detection algorithm",
+        description: `Processing with ${usePython ? 'Python backend' : 'JavaScript'} contour detection algorithm`,
       });
     };
     reader.onerror = () => {
@@ -64,15 +113,45 @@ const ImageProcessor = () => {
   // Reset processing
   const handleReset = () => {
     setCurrentStep(0);
+    setPythonVisualizations(null);
   };
   
   // Load sample image
   const loadSampleImage = (sampleKey: keyof typeof sampleImages) => {
+    setSelectedMedicalSample('');
     setImageUrl(sampleImages[sampleKey]);
+    setPythonVisualizations(null);
     toast({
       title: "Sample image loaded",
-      description: "Processing sample image with contour detection algorithm",
+      description: `Processing with ${usePython ? 'Python backend' : 'JavaScript'} contour detection algorithm`,
     });
+  };
+  
+  // Load medical sample
+  const loadMedicalSample = async (sampleId: string) => {
+    if (!sampleId) return;
+    
+    try {
+      setIsProcessing(true);
+      const imageData = await getSampleImage(sampleId);
+      if (imageData) {
+        setSelectedMedicalSample(sampleId);
+        setImageUrl(imageData);
+        setPythonVisualizations(null);
+        toast({
+          title: "Medical sample loaded",
+          description: "Processing medical image with contour detection algorithm",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error loading sample",
+        description: "Could not load the selected medical sample",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
   
   // Listen for sample image selection from gallery
@@ -97,7 +176,42 @@ const ImageProcessor = () => {
     };
   }, []);
   
-  // Process image step by step
+  // Process image with Python backend
+  const processImageWithPythonBackend = async () => {
+    if (!imageUrl) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      const response = await processImageWithPython(imageUrl, threshold);
+      
+      // Update visualizations 
+      setPythonVisualizations(response.visualizations);
+      
+      // Update current step
+      setCurrentStep(0);
+      
+      toast({
+        title: "Python processing complete",
+        description: `Found ${response.count} contours in the image`,
+      });
+    } catch (error) {
+      console.error('Python processing error:', error);
+      toast({
+        title: "Python processing failed",
+        description: "Could not process the image with the Python backend. Check that the server is running.",
+        variant: "destructive",
+      });
+      
+      // Fall back to JavaScript implementation
+      setUsePython(false);
+      processImage();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Process image with JavaScript implementation
   const processImage = () => {
     if (!imageUrl || !originalImage) return;
     
@@ -218,6 +332,86 @@ const ImageProcessor = () => {
     setIsProcessing(false);
   };
   
+  // Update canvas with Python visualizations
+  useEffect(() => {
+    if (!pythonVisualizations) return;
+    
+    const drawVisualization = (canvasRef: React.RefObject<HTMLCanvasElement>, imageUrl: string) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      const img = new Image();
+      img.src = imageUrl;
+      
+      img.onload = () => {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Calculate scaled dimensions
+        const maxWidth = canvas.width;
+        const maxHeight = canvas.height;
+        const aspectRatio = img.width / img.height;
+        
+        let scaledWidth = maxWidth;
+        let scaledHeight = scaledWidth / aspectRatio;
+        
+        if (scaledHeight > maxHeight) {
+          scaledHeight = maxHeight;
+          scaledWidth = scaledHeight * aspectRatio;
+        }
+        
+        // Draw image
+        ctx.drawImage(
+          img, 
+          (canvas.width - scaledWidth) / 2, 
+          (canvas.height - scaledHeight) / 2, 
+          scaledWidth, 
+          scaledHeight
+        );
+      };
+    };
+    
+    // Draw original image
+    if (originalImage) {
+      const canvas = originalCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Calculate scaled dimensions
+        const maxWidth = canvas.width;
+        const maxHeight = canvas.height;
+        const aspectRatio = originalImage.width / originalImage.height;
+        
+        let scaledWidth = maxWidth;
+        let scaledHeight = scaledWidth / aspectRatio;
+        
+        if (scaledHeight > maxHeight) {
+          scaledHeight = maxHeight;
+          scaledWidth = scaledHeight * aspectRatio;
+        }
+        
+        // Draw image
+        ctx.drawImage(
+          originalImage, 
+          (canvas.width - scaledWidth) / 2, 
+          (canvas.height - scaledHeight) / 2, 
+          scaledWidth, 
+          scaledHeight
+        );
+      }
+    }
+    
+    // Draw visualizations from Python backend
+    drawVisualization(grayscaleCanvasRef, pythonVisualizations.grayscale);
+    drawVisualization(thresholdCanvasRef, pythonVisualizations.threshold);
+    drawVisualization(contourCanvasRef, pythonVisualizations.contour);
+    
+  }, [pythonVisualizations, originalImage]);
+  
   // Load image when URL changes
   useEffect(() => {
     if (!imageUrl) return;
@@ -237,12 +431,16 @@ const ImageProcessor = () => {
     };
   }, [imageUrl]);
   
-  // Process image when originalImage is set
+  // Process image when originalImage is set or when processing options change
   useEffect(() => {
     if (originalImage) {
-      processImage();
+      if (usePython) {
+        processImageWithPythonBackend();
+      } else {
+        processImage();
+      }
     }
-  }, [originalImage, threshold]);
+  }, [originalImage, threshold, usePython]);
   
   // Handle next step button
   const nextStep = () => {
@@ -371,6 +569,31 @@ const ImageProcessor = () => {
               </CardFooter>
             </Card>
             
+            {usePython && medicalSamples.length > 0 && (
+              <Card className="glass-card">
+                <CardHeader>
+                  <CardTitle>Medical Samples</CardTitle>
+                  <CardDescription>
+                    Real medical images for contour detection
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Select value={selectedMedicalSample} onValueChange={loadMedicalSample}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a medical sample" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {medicalSamples.map((sample) => (
+                        <SelectItem key={sample.id} value={sample.id}>
+                          {sample.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            )}
+            
             <Card className="glass-card">
               <CardHeader>
                 <CardTitle>Settings</CardTitle>
@@ -379,6 +602,18 @@ const ImageProcessor = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="flex items-center space-x-2 mb-6">
+                  <Switch 
+                    id="python-mode" 
+                    checked={usePython}
+                    onCheckedChange={setUsePython}
+                  />
+                  <Label htmlFor="python-mode" className="flex items-center">
+                    <Cpu className="w-4 h-4 mr-2" />
+                    Use Python Backend
+                  </Label>
+                </div>
+                
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-medium">Threshold</label>
@@ -390,7 +625,7 @@ const ImageProcessor = () => {
                     max={255}
                     step={1}
                     onValueChange={(value) => setThreshold(value[0])}
-                    disabled={!originalImage}
+                    disabled={!originalImage || isProcessing}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Controls the cutoff between black and white pixels
@@ -407,7 +642,7 @@ const ImageProcessor = () => {
                   Reset
                 </Button>
                 <Button 
-                  onClick={processImage}
+                  onClick={usePython ? processImageWithPythonBackend : processImage}
                   disabled={!originalImage || isProcessing}
                 >
                   Process Image
@@ -417,24 +652,25 @@ const ImageProcessor = () => {
             
             <Card className="glass-card">
               <CardHeader>
-                <CardTitle>About Contour Detection</CardTitle>
+                <CardTitle>About Python-based Contour Detection</CardTitle>
                 <CardDescription>
                   How the algorithm works
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-sm space-y-4">
                 <p>
-                  Contour detection is a technique used to identify the boundaries of objects in an image. The process typically involves:
+                  Our Python backend uses OpenCV's powerful contour detection algorithms for precise boundary identification:
                 </p>
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>Converting the image to grayscale to simplify processing</li>
-                  <li>Applying a threshold to create a binary (black and white) image</li>
-                  <li>Tracing the boundaries between white and black regions</li>
-                  <li>Storing these boundaries as contours</li>
+                  <li>Converting the image to grayscale using OpenCV's optimized methods</li>
+                  <li>Applying Gaussian blur to reduce noise and improve detection</li>
+                  <li>Creating a binary image through adaptive thresholding</li>
+                  <li>Using OpenCV's findContours function to efficiently extract boundaries</li>
+                  <li>Analyzing and filtering contours based on their properties</li>
                 </ol>
                 <p className="flex items-start gap-2 text-xs mt-4">
                   <AlertCircle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                  <span>This is a simplified educational implementation. Professional applications often use more sophisticated algorithms like Canny edge detection.</span>
+                  <span>Python provides significantly better performance for medical image processing tasks compared to JavaScript.</span>
                 </p>
               </CardContent>
             </Card>
@@ -530,6 +766,34 @@ const ImageProcessor = () => {
                                'Medical Imaging'}
                             </Button>
                           ))}
+                        </div>
+                        {medicalSamples.length > 0 && (
+                          <div className="mt-4">
+                            <p className="mb-2 text-sm font-medium">Medical Samples:</p>
+                            <div className="flex flex-wrap gap-2 justify-center">
+                              {medicalSamples.map((sample) => (
+                                <Button 
+                                  key={sample.id} 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => loadMedicalSample(sample.id)}
+                                >
+                                  {sample.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {isProcessing && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+                        <div className="flex flex-col items-center space-y-4">
+                          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                          <p className="text-sm font-medium">
+                            Processing with {usePython ? 'Python' : 'JavaScript'}...
+                          </p>
                         </div>
                       </div>
                     )}
