@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { pythonContourService, ContourResponse } from "@/services/pythonContourService";
 import { Upload, ImageIcon, RefreshCw } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 const ImageProcessor = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -22,12 +22,10 @@ const ImageProcessor = () => {
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Image conversion and processing functions
   const convertToGrayscale = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
     const output = new Uint8ClampedArray(data.length);
 
-    // First pass: find min and max
     let min = 255;
     let max = 0;
     for (let i = 0; i < data.length; i += 4) {
@@ -36,7 +34,6 @@ const ImageProcessor = () => {
       max = Math.max(max, gray);
     }
 
-    // Second pass: normalize
     const range = max - min;
     for (let i = 0; i < data.length; i += 4) {
       const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
@@ -55,7 +52,6 @@ const ImageProcessor = () => {
     const { data, width, height } = imageData;
     const output = new Uint8ClampedArray(data.length);
 
-    // A 5x5 Gaussian kernel
     const kernel = [
       [1,  4,  6,  4,  1],
       [4, 16, 24, 16,  4],
@@ -64,7 +60,7 @@ const ImageProcessor = () => {
       [1,  4,  6,  4,  1],
     ];
     const kernelSize = 5;
-    const kernelSum = 256; // sum of the above kernel
+    const kernelSum = 256;
     const offset = Math.floor(kernelSize / 2);
 
     for (let y = offset; y < height - offset; y++) {
@@ -74,7 +70,7 @@ const ImageProcessor = () => {
           for (let kx = -offset; kx <= offset; kx++) {
             const idx = ((y + ky) * width + (x + kx)) * 4;
             const weight = kernel[ky + offset][kx + offset];
-            sum += data[idx] * weight; // only need one channel (grayscale)
+            sum += data[idx] * weight;
           }
         }
         const outIdx = (y * width + x) * 4;
@@ -92,7 +88,6 @@ const ImageProcessor = () => {
   const applyCannyEdgeDetection = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
 
-    // Sobel operator to get gradients
     const sobelX = [
       [-1, 0, 1],
       [-2, 0, 2],
@@ -104,11 +99,9 @@ const ImageProcessor = () => {
       [ 1,  2,  1],
     ];
 
-    // We'll store gradient magnitudes and directions
     const mag = new Float32Array(width * height);
     const dir = new Float32Array(width * height);
 
-    // Helper to get pixel from data (only need grayscale channel)
     const getGray = (x: number, y: number) => data[(y * width + x) * 4];
 
     for (let y = 1; y < height - 1; y++) {
@@ -116,7 +109,6 @@ const ImageProcessor = () => {
         let gx = 0;
         let gy = 0;
 
-        // Apply Sobel X/Y
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
             const val = getGray(x + kx, y + ky);
@@ -131,7 +123,6 @@ const ImageProcessor = () => {
       }
     }
 
-    // Non-Maximum Suppression (NMS)
     const nms = new Float32Array(width * height);
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
@@ -139,31 +130,24 @@ const ImageProcessor = () => {
         const angle = dir[idx];
         const magnitude = mag[idx];
 
-        // Determine the direction sector
         const degree = ((angle * 180) / Math.PI) % 180;
         let neighbor1 = 0;
         let neighbor2 = 0;
 
-        // Check neighbors along gradient direction
         if ((degree >= 0 && degree < 22.5) || (degree >= 157.5 && degree < 180)) {
-          // left-right
           neighbor1 = mag[idx - 1];
           neighbor2 = mag[idx + 1];
         } else if (degree >= 22.5 && degree < 67.5) {
-          // top-left -> bottom-right
           neighbor1 = mag[idx - width - 1];
           neighbor2 = mag[idx + width + 1];
         } else if (degree >= 67.5 && degree < 112.5) {
-          // top-bottom
           neighbor1 = mag[idx - width];
           neighbor2 = mag[idx + width];
         } else {
-          // top-right -> bottom-left
           neighbor1 = mag[idx - width + 1];
           neighbor2 = mag[idx + width - 1];
         }
 
-        // Suppress if not a local max
         if (magnitude >= neighbor1 && magnitude >= neighbor2) {
           nms[idx] = magnitude;
         } else {
@@ -172,25 +156,21 @@ const ImageProcessor = () => {
       }
     }
 
-    // Double Threshold
     const highThreshold = 50;
     const lowThreshold = 20;
 
-    // Edge map: 0 = no edge, 1 = weak edge, 2 = strong edge
     const edgeMap = new Uint8ClampedArray(width * height);
 
     for (let i = 0; i < nms.length; i++) {
       if (nms[i] >= highThreshold) {
-        edgeMap[i] = 2; // strong
+        edgeMap[i] = 2;
       } else if (nms[i] >= lowThreshold) {
-        edgeMap[i] = 1; // weak
+        edgeMap[i] = 1;
       } else {
-        edgeMap[i] = 0; // no edge
+        edgeMap[i] = 0;
       }
     }
 
-    // Hysteresis - connect weak edges to strong edges
-    const index = (x: number, y: number) => y * width + x;
     const directions = [
       [-1, -1], [-1, 0], [-1, 1],
       [0, -1],           [0, 1],
@@ -201,7 +181,6 @@ const ImageProcessor = () => {
       for (let x = 1; x < width - 1; x++) {
         const idx = index(x, y);
         if (edgeMap[idx] === 2) {
-          // Check neighbors
           const stack = [[x, y]];
           while (stack.length > 0) {
             const [cx, cy] = stack.pop()!;
@@ -221,7 +200,6 @@ const ImageProcessor = () => {
       }
     }
 
-    // Build final black/white image: strong edges => black pixel
     const outData = new Uint8ClampedArray(width * height * 4);
     for (let i = 0; i < edgeMap.length; i++) {
       const outIdx = i * 4;
@@ -241,7 +219,6 @@ const ImageProcessor = () => {
     return new ImageData(outData, width, height);
   };
 
-  // Find starting points for contours
   const findStartPoints = (imageData: ImageData): [number, number][] => {
     const { data, width, height } = imageData;
     const startPoints: [number, number][] = [];
@@ -254,10 +231,8 @@ const ImageProcessor = () => {
         const key = `${x},${y}`;
         if (visited.has(key)) continue;
 
-        // black pixel => data[idx] = 0
         const idx = (y * width + x) * 4;
         if (data[idx] === 0) {
-          // BFS to see how large this region is
           let contourSize = 0;
           const stack: [number, number][] = [[x, y]];
           const tempVisited = new Set<string>();
@@ -283,10 +258,8 @@ const ImageProcessor = () => {
             }
           }
 
-          // If region is large enough, we keep it
           if (contourSize > minContourSize) {
             startPoints.push([x, y]);
-            // Mark all visited
             tempVisited.forEach((p) => visited.add(p));
           }
         }
@@ -296,7 +269,6 @@ const ImageProcessor = () => {
     return startPoints;
   };
 
-  // Trace contour around edges
   const traceContour = (
     imageData: ImageData,
     startX: number,
@@ -346,7 +318,7 @@ const ImageProcessor = () => {
         ) {
           currentX = newX;
           currentY = newY;
-          dirIndex = (nextDir + 5) % 8; // turn around
+          dirIndex = (nextDir + 5) % 8;
           found = true;
         }
         count++;
@@ -358,7 +330,6 @@ const ImageProcessor = () => {
     return contour;
   };
 
-  // Smooth contour points
   const smoothContour = (contour: number[][], windowSize = 5): number[][] => {
     const smoothed: number[][] = [];
     const halfWindow = Math.floor(windowSize / 2);
@@ -383,7 +354,6 @@ const ImageProcessor = () => {
     return smoothed;
   };
 
-  // Draw contours on the canvas
   const drawContours = (
     ctx: CanvasRenderingContext2D,
     allContours: number[][][]
@@ -391,16 +361,11 @@ const ImageProcessor = () => {
     ctx.strokeStyle = "#FF0000";
     ctx.lineWidth = 2;
 
-    // Filter out small contours
     const filtered = allContours.filter((c) => c.length > 100);
-    // Sort largest first
     filtered.sort((a, b) => b.length - a.length);
-
-    // Keep top N
     const maxContours = 50;
     const toDraw = filtered.slice(0, maxContours);
 
-    // Smooth & draw
     toDraw.forEach((contour) => {
       const smoothed = smoothContour(contour, 5);
       ctx.beginPath();
@@ -414,7 +379,6 @@ const ImageProcessor = () => {
     });
   };
 
-  // Process the image with enhanced contour detection
   const processImage = () => {
     if (!selectedImage) {
       toast({
@@ -427,7 +391,6 @@ const ImageProcessor = () => {
     
     setIsProcessing(true);
 
-    // Check if canvas elements exist
     if (!canvasRef.current || !originalCanvasRef.current || !resultCanvasRef.current) {
       toast({
         title: "Canvas error",
@@ -447,7 +410,6 @@ const ImageProcessor = () => {
       let scaledWidth = img.width;
       let scaledHeight = img.height;
 
-      // Scale large images
       if (img.width > maxDimension || img.height > maxDimension) {
         if (img.width > img.height) {
           scaledWidth = maxDimension;
@@ -458,7 +420,6 @@ const ImageProcessor = () => {
         }
       }
 
-      // Draw original
       const originalCtx = originalCanvasRef.current!.getContext("2d");
       if (!originalCtx) {
         toast({
@@ -474,7 +435,6 @@ const ImageProcessor = () => {
       originalCanvasRef.current!.height = scaledHeight;
       originalCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-      // Setup for contour canvas
       const ctx = canvasRef.current!.getContext("2d", { willReadFrequently: true });
       if (!ctx) {
         toast({
@@ -491,20 +451,15 @@ const ImageProcessor = () => {
       ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
       try {
-        // 1) Grayscale
         let imageData = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
         imageData = convertToGrayscale(imageData);
 
-        // 2) Gaussian Blur
         imageData = applyGaussianBlur(imageData);
 
-        // 3) Canny Edges
         imageData = applyCannyEdgeDetection(imageData);
 
-        // Replace the canvas with the edges
         ctx.putImageData(imageData, 0, 0);
 
-        // Setup result canvas
         const resultCtx = resultCanvasRef.current!.getContext("2d");
         if (!resultCtx) {
           toast({
@@ -520,19 +475,17 @@ const ImageProcessor = () => {
         resultCanvasRef.current!.height = scaledHeight;
         resultCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
-        // 5) Find contour start points
         const startPoints = findStartPoints(imageData);
         if (startPoints.length === 0) {
           toast({
             title: "Processing result",
             description: "No contours detected in the image.",
-            variant: "warning"
+            variant: "destructive"
           });
           setIsProcessing(false);
           return;
         }
 
-        // 6) Trace all contours
         const allContours = startPoints
           .map(([x, y]) => {
             const c = traceContour(imageData, x, y);
@@ -544,13 +497,12 @@ const ImageProcessor = () => {
           toast({
             title: "Processing result",
             description: "No valid contours found after tracing.",
-            variant: "warning"
+            variant: "destructive"
           });
           setIsProcessing(false);
           return;
         }
 
-        // 7) Draw them on the result canvas
         drawContours(resultCtx, allContours);
         
         toast({
@@ -580,7 +532,6 @@ const ImageProcessor = () => {
     };
   };
 
-  // Fetch sample images from the backend
   useEffect(() => {
     const fetchSamples = async () => {
       try {
@@ -594,7 +545,6 @@ const ImageProcessor = () => {
     fetchSamples();
   }, []);
 
-  // Handle image file upload
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -614,7 +564,6 @@ const ImageProcessor = () => {
     reader.readAsDataURL(file);
   };
 
-  // Select a sample image
   const handleSelectSample = async (sampleId: string) => {
     try {
       setIsProcessing(true);
@@ -630,8 +579,7 @@ const ImageProcessor = () => {
       setIsProcessing(false);
     }
   };
-  
-  // Sample images for demonstration
+
   const sampleImages = [
     "/assets/sample1.jpg",
     "/assets/sample2.jpg",

@@ -9,6 +9,13 @@ import { sampleDatasets, sampleImages } from '@/utils/contourUtils';
 import { Layers, Eye, Download, ArrowRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
+// Declare the global window property for TypeScript
+declare global {
+  interface Window {
+    selectedSampleImage?: keyof typeof sampleImages;
+  }
+}
+
 const ImageGallery = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const { toast } = useToast();
