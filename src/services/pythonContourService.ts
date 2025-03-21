@@ -107,6 +107,7 @@ class PythonContourService {
   async getSampleImage(sampleId: string): Promise<string> {
     // Default fallback images for different sample types
     const fallbackImages: Record<string, string> = {
+      'portrait': 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1',
       'brain-mri': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1',
       'lung-ct': 'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&cors=1',
       'liver-ultrasound': 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1',
@@ -115,7 +116,7 @@ class PythonContourService {
     
     if (this.fallbackMode) {
       console.warn('Running in fallback mode - Python backend not available');
-      return fallbackImages[sampleId] || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1';
+      return fallbackImages[sampleId] || 'https://images.unsplash.com/photo-1575936123452-b67c3203c357?w=500&auto=format&cors=1';
     }
     
     try {

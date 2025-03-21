@@ -32,6 +32,7 @@ const ImageProcessor = () => {
     return new ImageData(output, width, height);
   };
 
+  // Improved adaptive threshold function with inverse binary threshold
   const applyAdaptiveThreshold = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
     const output = new Uint8ClampedArray(data.length);
@@ -77,6 +78,7 @@ const ImageProcessor = () => {
     return new ImageData(output, width, height);
   };
 
+  // Improved contour finding algorithm based on the Python example
   const findContours = (binaryImageData: ImageData): number[][][] => {
     const { data, width, height } = binaryImageData;
     const visited = new Uint8Array(width * height);
@@ -102,29 +104,48 @@ const ImageProcessor = () => {
     const dx = [1, 1, 0, -1, -1, -1, 0, 1];
     const dy = [0, -1, -1, -1, 0, 1, 1, 1];
 
-    // Find starting points for contours (white pixels with black neighbors)
+    // First pass: Mark borders between white and black regions
+    const borders = new Uint8Array(width * height);
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        if (getPixel(x, y) === 1) {
+          // Check if this is a border pixel (has at least one black neighbor)
+          for (let d = 0; d < 8; d++) {
+            const nx = x + dx[d];
+            const ny = y + dy[d];
+            if (getPixel(nx, ny) === 0) {
+              borders[y * width + x] = 1;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Second pass: Trace contours along the borders
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (getPixel(x, y) === 1 && !isVisited(x, y)) {
-          // Found a potential contour starting point
+        if (borders[y * width + x] === 1 && !isVisited(x, y)) {
+          // Found a contour starting point
           const contour: number[][] = [];
           let cx = x;
           let cy = y;
-          let dir = 7; // Start direction (assuming we came from the right)
+          let dir = 7; // Start direction
 
           do {
             contour.push([cx, cy]);
             markVisited(cx, cy);
 
-            // Find the next pixel in the contour
+            // Find the next border pixel in the contour
             let found = false;
-            let newDir = (dir + 5) % 8; // Start looking at the leftmost direction relative to current direction
+            let newDir = (dir + 5) % 8; // Start looking at the leftmost direction
             
             for (let i = 0; i < 8; i++) {
               const nx = cx + dx[newDir];
               const ny = cy + dy[newDir];
               
-              if (getPixel(nx, ny) === 1 && !isVisited(nx, ny)) {
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height && 
+                  borders[ny * width + nx] === 1 && !isVisited(nx, ny)) {
                 cx = nx;
                 cy = ny;
                 dir = newDir;
@@ -136,7 +157,7 @@ const ImageProcessor = () => {
             }
             
             if (!found) break;
-          } while (cx !== x || cy !== y);
+          } while (cx !== x || cy !== y && contour.length < 10000); // Avoid infinite loops
           
           if (contour.length > 20) { // Filter out small contours
             contours.push(contour);
@@ -148,45 +169,131 @@ const ImageProcessor = () => {
     return contours;
   };
 
+  // Draw method similar to cv2.drawContours with fill and outline options
   const drawContours = (
     ctx: CanvasRenderingContext2D, 
     contours: number[][][], 
-    fillColor: string = 'rgba(0, 200, 175, 0.5)',
-    strokeColor: string = 'rgb(0, 255, 0)'
+    originalImageData: ImageData,
+    drawMode: 'fill' | 'outline' | 'highlight' | 'extract' = 'highlight'
   ) => {
-    // First draw the filled contours
-    ctx.fillStyle = fillColor;
+    const { width, height } = originalImageData;
     
-    for (const contour of contours) {
-      if (contour.length < 3) continue;
+    // Create an empty canvas for generating a mask if needed
+    let maskCanvas: HTMLCanvasElement | null = null;
+    let maskCtx: CanvasRenderingContext2D | null = null;
+    
+    if (drawMode === 'extract') {
+      maskCanvas = document.createElement('canvas');
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+      maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
       
-      ctx.beginPath();
-      ctx.moveTo(contour[0][0], contour[0][1]);
+      if (!maskCtx) return;
       
-      for (let i = 1; i < contour.length; i++) {
-        ctx.lineTo(contour[i][0], contour[i][1]);
-      }
-      
-      ctx.closePath();
-      ctx.fill();
+      // Black background
+      maskCtx.fillStyle = 'black';
+      maskCtx.fillRect(0, 0, width, height);
     }
     
-    // Then draw the outlines
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = 2;
+    // Clear canvas if not extracting
+    if (drawMode !== 'extract') {
+      ctx.clearRect(0, 0, width, height);
+      
+      // For highlight mode, draw the original image first
+      if (drawMode === 'highlight') {
+        // Fill with white first to ensure proper background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+      } else {
+        // For other modes, draw the original image first
+        ctx.putImageData(originalImageData, 0, 0);
+      }
+    }
     
+    // Draw the contours based on the mode
     for (const contour of contours) {
       if (contour.length < 3) continue;
       
-      ctx.beginPath();
-      ctx.moveTo(contour[0][0], contour[0][1]);
-      
-      for (let i = 1; i < contour.length; i++) {
-        ctx.lineTo(contour[i][0], contour[i][1]);
+      if (drawMode === 'fill' || drawMode === 'highlight') {
+        // For fill mode, fill the contours
+        ctx.beginPath();
+        ctx.moveTo(contour[0][0], contour[0][1]);
+        
+        for (let i = 1; i < contour.length; i++) {
+          ctx.lineTo(contour[i][0], contour[i][1]);
+        }
+        
+        ctx.closePath();
+        
+        if (drawMode === 'fill') {
+          // Fill with green semi-transparent
+          ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+          ctx.fill();
+        } else if (drawMode === 'highlight') {
+          // Fill with the aqua color like in the Python example
+          ctx.fillStyle = 'rgba(0, 200, 175, 0.7)';
+          ctx.fill();
+        }
       }
       
-      ctx.closePath();
-      ctx.stroke();
+      if (drawMode === 'outline' || drawMode === 'fill') {
+        // For outline mode, draw the contour lines
+        ctx.beginPath();
+        ctx.moveTo(contour[0][0], contour[0][1]);
+        
+        for (let i = 1; i < contour.length; i++) {
+          ctx.lineTo(contour[i][0], contour[i][1]);
+        }
+        
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(0, 255, 0, 1)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      
+      if (drawMode === 'extract' && maskCtx) {
+        // For extract mode, create a white mask of the contours
+        maskCtx.beginPath();
+        maskCtx.moveTo(contour[0][0], contour[0][1]);
+        
+        for (let i = 1; i < contour.length; i++) {
+          maskCtx.lineTo(contour[i][0], contour[i][1]);
+        }
+        
+        maskCtx.closePath();
+        maskCtx.fillStyle = 'white';
+        maskCtx.fill();
+      }
+    }
+    
+    // For extract mode, apply the mask to the original image
+    if (drawMode === 'extract' && maskCtx && maskCanvas) {
+      const maskData = maskCtx.getImageData(0, 0, width, height);
+      const origData = originalImageData.data;
+      const maskDataArr = maskData.data;
+      
+      // Create a new image data for the result
+      const resultData = new Uint8ClampedArray(origData.length);
+      
+      // Apply the mask
+      for (let i = 0; i < origData.length; i += 4) {
+        const alpha = maskDataArr[i]; // Use the red channel as mask (since we filled with white)
+        
+        if (alpha > 0) {
+          resultData[i] = origData[i];
+          resultData[i + 1] = origData[i + 1];
+          resultData[i + 2] = origData[i + 2];
+        } else {
+          resultData[i] = 0;
+          resultData[i + 1] = 0;
+          resultData[i + 2] = 0;
+        }
+        
+        resultData[i + 3] = 255;
+      }
+      
+      // Draw the masked image
+      ctx.putImageData(new ImageData(resultData, width, height), 0, 0);
     }
   };
 
@@ -231,7 +338,7 @@ const ImageProcessor = () => {
         }
       }
 
-      const originalCtx = originalCanvasRef.current!.getContext("2d");
+      const originalCtx = originalCanvasRef.current!.getContext("2d", { willReadFrequently: true });
       if (!originalCtx) {
         toast({
           title: "Canvas error",
@@ -245,6 +352,7 @@ const ImageProcessor = () => {
       originalCanvasRef.current!.width = scaledWidth;
       originalCanvasRef.current!.height = scaledHeight;
       originalCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+      const originalImageData = originalCtx.getImageData(0, 0, scaledWidth, scaledHeight);
 
       const ctx = canvasRef.current!.getContext("2d", { willReadFrequently: true });
       if (!ctx) {
@@ -259,20 +367,19 @@ const ImageProcessor = () => {
       
       canvasRef.current!.width = scaledWidth;
       canvasRef.current!.height = scaledHeight;
-      ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
       try {
         // 1. Convert to grayscale
-        let imageData = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
+        let imageData = originalCtx.getImageData(0, 0, scaledWidth, scaledHeight);
         const grayscaleData = convertToGrayscale(imageData);
         ctx.putImageData(grayscaleData, 0, 0);
         
-        // 2. Apply adaptive threshold (binarization)
+        // 2. Apply adaptive threshold (binarization with inverse)
         const thresholdData = applyAdaptiveThreshold(grayscaleData);
         ctx.putImageData(thresholdData, 0, 0);
         
         // Prepare the result canvas
-        const resultCtx = resultCanvasRef.current!.getContext("2d");
+        const resultCtx = resultCanvasRef.current!.getContext("2d", { willReadFrequently: true });
         if (!resultCtx) {
           toast({
             title: "Canvas error",
@@ -285,9 +392,8 @@ const ImageProcessor = () => {
         
         resultCanvasRef.current!.width = scaledWidth;
         resultCanvasRef.current!.height = scaledHeight;
-        resultCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
         
-        // 3. Find and draw contours
+        // 3. Find contours
         const contours = findContours(thresholdData);
         
         if (contours.length === 0) {
@@ -300,8 +406,8 @@ const ImageProcessor = () => {
           return;
         }
         
-        // Draw contours on original image
-        drawContours(resultCtx, contours);
+        // 4. Draw filled contours (like the "highlight" mode in the Python code)
+        drawContours(resultCtx, contours, originalImageData, 'highlight');
         
         toast({
           title: "Processing complete",
@@ -365,10 +471,12 @@ const ImageProcessor = () => {
   };
 
   const sampleImages = [
+    "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1", // New image added
+    "https://images.unsplash.com/photo-1575936123452-b67c3203c357?w=500&auto=format&cors=1", // High contrast face
+    "https://images.unsplash.com/photo-1611915387288-fd8d2f5f928b?w=500&auto=format&cors=1", // Simple shapes
+    "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?w=500&auto=format&cors=1", // Shoes
     "https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&cors=1",
     "https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1",
-    "https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&cors=1",
-    "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1",
   ];
 
   const handleSampleImageClick = (imageUrl: string) => {

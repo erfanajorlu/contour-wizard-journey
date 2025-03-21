@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +10,20 @@ import { useToast } from "@/hooks/use-toast";
 // Define sample datasets with high-contrast images better suited for contour detection
 const sampleDatasets = [
   {
+    id: 'portrait',
+    name: 'Portrait',
+    description: 'Human face with clear features for detection',
+    complexity: 'Medium',
+    bestFor: 'Face contour detection',
+    imageUrl: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1'
+  },
+  {
     id: 'medical-imaging',
     name: 'Medical Imaging',
     description: 'Medical scans with clear structures',
     complexity: 'High',
     bestFor: 'Medical contour detection',
-    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1'
   },
   {
     id: 'household-objects',
@@ -24,7 +31,7 @@ const sampleDatasets = [
     description: 'Everyday items with distinct contours',
     complexity: 'Medium',
     bestFor: 'Practicing object detection',
-    imageUrl: 'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?w=500&auto=format&cors=1'
   },
   {
     id: 'architecture',
@@ -32,15 +39,7 @@ const sampleDatasets = [
     description: 'Buildings with clear geometric shapes',
     complexity: 'Medium',
     bestFor: 'Edge detection on structures',
-    imageUrl: 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'simple-objects',
-    name: 'Simple Objects',
-    description: 'High-contrast objects for clear contours',
-    complexity: 'Low',
-    bestFor: 'Learning contour basics',
-    imageUrl: 'https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&fit=crop&q=80'
+    imageUrl: 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1'
   }
 ];
 
