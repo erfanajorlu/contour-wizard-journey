@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
-import { Footer } from "@/components/Footer";
-import { Header } from "@/components/Header";
+import Footer from "@/components/Footer";
+import Header from "@/components/Header";
 import ImageGallery from "@/components/ImageGallery";
 import ImageProcessor from "@/components/ImageProcessor";
 import Tutorial from "@/components/Tutorial";
