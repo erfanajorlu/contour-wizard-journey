@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,7 @@ const ImageProcessor = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
+  const { toast } = useToast();
 
   const convertToGrayscale = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
@@ -214,6 +216,11 @@ const ImageProcessor = () => {
         outData[outIdx + 2] = 255;
         outData[outIdx + 3] = 255;
       }
+    }
+
+    // Helper function to convert x,y to array index
+    function index(x: number, y: number): number {
+      return y * width + x;
     }
 
     return new ImageData(outData, width, height);
