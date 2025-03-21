@@ -90,6 +90,20 @@ const ImageGallery = () => {
       }
     })
   };
+
+  // Ensure images are preloaded
+  React.useEffect(() => {
+    const preloadImages = () => {
+      Object.values(sampleImages).forEach(url => {
+        const img = new Image();
+        img.src = url;
+        img.onload = () => console.log(`Preloaded: ${url}`);
+        img.onerror = (e) => console.error(`Failed to preload: ${url}`, e);
+      });
+    };
+    
+    preloadImages();
+  }, []);
   
   return (
     <section id="gallery" className="py-16 px-4 sm:px-6 md:px-8">
@@ -149,17 +163,49 @@ const ImageGallery = () => {
                     <Card className="glass-card overflow-hidden h-full flex flex-col group">
                       <div className="relative">
                         <div className="aspect-video w-full overflow-hidden bg-muted">
-                          {dataset.id === 'basic-shapes' && (
-                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.basicShapes})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          {dataset.id === 'basic-shapes' && sampleImages.basicShapes && (
+                            <img 
+                              src={sampleImages.basicShapes} 
+                              alt="Basic Shapes" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error("Failed to load image:", e);
+                                (e.target as HTMLImageElement).src = "/placeholder.svg";
+                              }}
+                            />
                           )}
-                          {dataset.id === 'household-objects' && (
-                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.householdObjects})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          {dataset.id === 'household-objects' && sampleImages.householdObjects && (
+                            <img 
+                              src={sampleImages.householdObjects} 
+                              alt="Household Objects" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error("Failed to load image:", e);
+                                (e.target as HTMLImageElement).src = "/placeholder.svg";
+                              }}
+                            />
                           )}
-                          {dataset.id === 'natural-scenes' && (
-                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.naturalScenes})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          {dataset.id === 'natural-scenes' && sampleImages.naturalScenes && (
+                            <img 
+                              src={sampleImages.naturalScenes} 
+                              alt="Natural Scenes" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error("Failed to load image:", e);
+                                (e.target as HTMLImageElement).src = "/placeholder.svg";
+                              }}
+                            />
                           )}
-                          {dataset.id === 'medical-imaging' && (
-                            <div className="w-full h-full" style={{ backgroundImage: `url(${sampleImages.medicalImaging})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+                          {dataset.id === 'medical-imaging' && sampleImages.medicalImaging && (
+                            <img 
+                              src={sampleImages.medicalImaging} 
+                              alt="Medical Imaging" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error("Failed to load image:", e);
+                                (e.target as HTMLImageElement).src = "/placeholder.svg";
+                              }}
+                            />
                           )}
                         </div>
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
@@ -237,6 +283,10 @@ const ImageGallery = () => {
                   src={selectedImage} 
                   alt="Preview" 
                   className="max-w-full max-h-full object-contain"
+                  onError={(e) => {
+                    console.error("Failed to load preview image");
+                    (e.target as HTMLImageElement).src = "/placeholder.svg";
+                  }}
                 />
               </div>
               
