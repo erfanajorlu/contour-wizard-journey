@@ -29,11 +29,25 @@ export interface MedicalSample {
 
 class PythonContourService {
   private readonly apiUrl: string = 'http://localhost:5000/api';
+  private readonly fallbackMode: boolean = true; // Set to true as we're not using a real backend
 
   /**
    * Process an image with the Python contour detection API
    */
   async detectContours(imageData: string, threshold: number): Promise<ContourResponse> {
+    if (this.fallbackMode) {
+      console.warn('Running in fallback mode - Python backend not available');
+      return {
+        contours: [],
+        count: 0,
+        visualizations: {
+          grayscale: '',
+          threshold: '',
+          contour: ''
+        }
+      };
+    }
+    
     try {
       const response = await fetch(`${this.apiUrl}/detect_contours`, {
         method: 'POST',
@@ -62,6 +76,14 @@ class PythonContourService {
    * Get all available medical samples
    */
   async getMedicalSamples(): Promise<MedicalSample[]> {
+    if (this.fallbackMode) {
+      console.warn('Running in fallback mode - Python backend not available');
+      return [
+        { id: 'sample1', name: 'Sample 1', category: 'Basic' },
+        { id: 'sample2', name: 'Sample 2', category: 'Advanced' }
+      ];
+    }
+    
     try {
       const response = await fetch(`${this.apiUrl}/medical_samples`);
       
@@ -81,6 +103,11 @@ class PythonContourService {
    * Get a specific sample image by ID
    */
   async getSampleImage(sampleId: string): Promise<string> {
+    if (this.fallbackMode) {
+      console.warn('Running in fallback mode - Python backend not available');
+      return 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1';
+    }
+    
     try {
       const response = await fetch(`${this.apiUrl}/sample/${sampleId}`);
       

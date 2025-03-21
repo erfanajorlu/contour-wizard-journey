@@ -2,22 +2,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { pythonContourService, ContourResponse } from "@/services/pythonContourService";
-import { Upload, ImageIcon, RefreshCw } from "lucide-react";
+import { Upload, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ImageProcessor = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [thresholdValue, setThresholdValue] = useState<number>(127);
-  const [contourData, setContourData] = useState<ContourResponse | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [selectedTab, setSelectedTab] = useState<string>("upload");
-  const [sampleList, setSampleList] = useState<Array<{ id: string; name: string; category: string }>>([]);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const originalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -540,16 +532,18 @@ const ImageProcessor = () => {
   };
 
   useEffect(() => {
-    const fetchSamples = async () => {
-      try {
-        const samples = await pythonContourService.getMedicalSamples();
-        setSampleList(samples);
-      } catch (error) {
-        console.error("Error fetching samples:", error);
+    // Listen for sample image selection from the gallery
+    const handleSampleSelection = (event: CustomEvent) => {
+      if (event.detail && event.detail.imageUrl) {
+        setSelectedImage(event.detail.imageUrl);
       }
     };
 
-    fetchSamples();
+    document.addEventListener('sampleImageSelected', handleSampleSelection as EventListener);
+    
+    return () => {
+      document.removeEventListener('sampleImageSelected', handleSampleSelection as EventListener);
+    };
   }, []);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -569,22 +563,6 @@ const ImageProcessor = () => {
       });
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleSelectSample = async (sampleId: string) => {
-    try {
-      setIsProcessing(true);
-      const imageData = await pythonContourService.getSampleImage(sampleId);
-      setSelectedImage(imageData);
-    } catch (error) {
-      toast({
-        title: "Sample loading error",
-        description: "Failed to load the sample image.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   const sampleImages = [
@@ -655,24 +633,7 @@ const ImageProcessor = () => {
                 </TabsContent>
               </Tabs>
 
-              <div className="my-6">
-                <Separator />
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="threshold">Processing Threshold</Label>
-                  <Slider
-                    id="threshold"
-                    min={0}
-                    max={255}
-                    step={1}
-                    value={[thresholdValue]}
-                    onValueChange={(value) => setThresholdValue(value[0])}
-                    className="mt-2"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Value: {thresholdValue}</p>
-                </div>
+              <div className="space-y-4 mt-6">
                 <Button 
                   onClick={processImage} 
                   disabled={isProcessing || !selectedImage}

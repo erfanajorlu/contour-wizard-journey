@@ -5,16 +5,44 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { sampleDatasets, sampleImages } from '@/utils/contourUtils';
-import { Layers, Eye, Download, ArrowRight } from 'lucide-react';
+import { Layers, Eye, ArrowRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
-// Declare the global window property for TypeScript
-declare global {
-  interface Window {
-    selectedSampleImage?: keyof typeof sampleImages;
+// Define sample datasets
+const sampleDatasets = [
+  {
+    id: 'basic-shapes',
+    name: 'Basic Shapes',
+    description: 'Simple geometric shapes with clear boundaries',
+    complexity: 'Low',
+    bestFor: 'Learning the basics of contour detection',
+    imageUrl: 'https://images.unsplash.com/photo-1630395822970-acd6a691d97e?w=500&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 'household-objects',
+    name: 'Household Objects',
+    description: 'Everyday items with distinctive contours',
+    complexity: 'Medium',
+    bestFor: 'Practicing real-world contour detection',
+    imageUrl: 'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 'natural-scenes',
+    name: 'Natural Scenes',
+    description: 'Outdoor environments with organic shapes',
+    complexity: 'High',
+    bestFor: 'Advanced contour detection challenges',
+    imageUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=500&auto=format&fit=crop&q=80'
+  },
+  {
+    id: 'medical-imaging',
+    name: 'Medical Imaging',
+    description: 'Simulated medical scans for analysis',
+    complexity: 'Very High',
+    bestFor: 'Specialized contour detection applications',
+    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&fit=crop&q=80'
   }
-}
+];
 
 const ImageGallery = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -41,26 +69,7 @@ const ImageGallery = () => {
     );
   };
   
-  const handleTryImage = (datasetId: string) => {
-    let sampleKey: keyof typeof sampleImages;
-    
-    switch (datasetId) {
-      case 'basic-shapes':
-        sampleKey = 'basicShapes';
-        break;
-      case 'household-objects':
-        sampleKey = 'householdObjects';
-        break;
-      case 'natural-scenes':
-        sampleKey = 'naturalScenes';
-        break;
-      case 'medical-imaging':
-        sampleKey = 'medicalImaging';
-        break;
-      default:
-        return;
-    }
-    
+  const handleTryImage = (dataset: typeof sampleDatasets[0]) => {
     // Find the processor section and scroll to it
     const processorSection = document.getElementById('processor');
     if (processorSection) {
@@ -75,12 +84,9 @@ const ImageGallery = () => {
       }, 1000);
     }
     
-    // Set a global variable that ImageProcessor can access
-    window.selectedSampleImage = sampleKey;
-    
-    // Create and dispatch a custom event
+    // Create and dispatch a custom event with the image URL
     const event = new CustomEvent('sampleImageSelected', { 
-      detail: { sampleKey }
+      detail: { imageUrl: dataset.imageUrl }
     });
     document.dispatchEvent(event);
   };
@@ -97,20 +103,6 @@ const ImageGallery = () => {
       }
     })
   };
-
-  // Ensure images are preloaded
-  React.useEffect(() => {
-    const preloadImages = () => {
-      Object.values(sampleImages).forEach(url => {
-        const img = new Image();
-        img.src = url;
-        img.onload = () => console.log(`Preloaded: ${url}`);
-        img.onerror = (e) => console.error(`Failed to preload: ${url}`, e);
-      });
-    };
-    
-    preloadImages();
-  }, []);
   
   return (
     <section id="gallery" className="py-16 px-4 sm:px-6 md:px-8">
@@ -167,65 +159,25 @@ const ImageGallery = () => {
                     animate="visible"
                     variants={fadeInUpVariant}
                   >
-                    <Card className="glass-card overflow-hidden h-full flex flex-col group">
+                    <Card className="overflow-hidden h-full flex flex-col group">
                       <div className="relative">
                         <div className="aspect-video w-full overflow-hidden bg-muted">
-                          {dataset.id === 'basic-shapes' && sampleImages.basicShapes && (
-                            <img 
-                              src={sampleImages.basicShapes} 
-                              alt="Basic Shapes" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error("Failed to load image:", e);
-                                (e.target as HTMLImageElement).src = "/placeholder.svg";
-                              }}
-                            />
-                          )}
-                          {dataset.id === 'household-objects' && sampleImages.householdObjects && (
-                            <img 
-                              src={sampleImages.householdObjects} 
-                              alt="Household Objects" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error("Failed to load image:", e);
-                                (e.target as HTMLImageElement).src = "/placeholder.svg";
-                              }}
-                            />
-                          )}
-                          {dataset.id === 'natural-scenes' && sampleImages.naturalScenes && (
-                            <img 
-                              src={sampleImages.naturalScenes} 
-                              alt="Natural Scenes" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error("Failed to load image:", e);
-                                (e.target as HTMLImageElement).src = "/placeholder.svg";
-                              }}
-                            />
-                          )}
-                          {dataset.id === 'medical-imaging' && sampleImages.medicalImaging && (
-                            <img 
-                              src={sampleImages.medicalImaging} 
-                              alt="Medical Imaging" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error("Failed to load image:", e);
-                                (e.target as HTMLImageElement).src = "/placeholder.svg";
-                              }}
-                            />
-                          )}
+                          <img 
+                            src={dataset.imageUrl} 
+                            alt={dataset.name} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error("Failed to load image:", e);
+                              (e.target as HTMLImageElement).src = "/placeholder.svg";
+                            }}
+                          />
                         </div>
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                           <Button 
                             variant="secondary" 
                             size="sm" 
                             className="gap-1"
-                            onClick={() => setSelectedImage(
-                              dataset.id === 'basic-shapes' ? sampleImages.basicShapes :
-                              dataset.id === 'household-objects' ? sampleImages.householdObjects :
-                              dataset.id === 'natural-scenes' ? sampleImages.naturalScenes :
-                              sampleImages.medicalImaging
-                            )}
+                            onClick={() => setSelectedImage(dataset.imageUrl)}
                           >
                             <Eye className="w-4 h-4" />
                             Preview
@@ -256,7 +208,7 @@ const ImageGallery = () => {
                           variant="outline" 
                           size="sm" 
                           className="text-xs w-full gap-1"
-                          onClick={() => handleTryImage(dataset.id)}
+                          onClick={() => handleTryImage(dataset)}
                         >
                           <Layers className="w-3.5 h-3.5" />
                           Try This Image
@@ -312,12 +264,11 @@ const ImageGallery = () => {
                   size="sm" 
                   className="text-white border-white/20 bg-white/10 hover:bg-white/20 backdrop-blur-sm gap-1"
                   onClick={() => {
-                    // Just close the modal and scroll to processor
-                    setSelectedImage(null);
-                    const processorSection = document.getElementById('processor');
-                    if (processorSection) {
-                      processorSection.scrollIntoView({ behavior: 'smooth' });
+                    const dataset = sampleDatasets.find(d => d.imageUrl === selectedImage);
+                    if (dataset) {
+                      handleTryImage(dataset);
                     }
+                    setSelectedImage(null);
                   }}
                 >
                   Try This Image
