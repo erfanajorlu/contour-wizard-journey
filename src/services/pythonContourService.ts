@@ -79,8 +79,10 @@ class PythonContourService {
     if (this.fallbackMode) {
       console.warn('Running in fallback mode - Python backend not available');
       return [
-        { id: 'sample1', name: 'Sample 1', category: 'Basic' },
-        { id: 'sample2', name: 'Sample 2', category: 'Advanced' }
+        { id: 'brain-mri', name: 'Brain MRI', category: 'Medical' },
+        { id: 'lung-ct', name: 'Lung CT Scan', category: 'Medical' },
+        { id: 'liver-ultrasound', name: 'Liver Ultrasound', category: 'Medical' },
+        { id: 'retina-scan', name: 'Retina Scan', category: 'Medical' }
       ];
     }
     
@@ -103,9 +105,17 @@ class PythonContourService {
    * Get a specific sample image by ID
    */
   async getSampleImage(sampleId: string): Promise<string> {
+    // Default fallback images for different sample types
+    const fallbackImages: Record<string, string> = {
+      'brain-mri': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1',
+      'lung-ct': 'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&cors=1',
+      'liver-ultrasound': 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1',
+      'retina-scan': 'https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&cors=1'
+    };
+    
     if (this.fallbackMode) {
       console.warn('Running in fallback mode - Python backend not available');
-      return 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1';
+      return fallbackImages[sampleId] || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1';
     }
     
     try {

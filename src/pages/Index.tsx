@@ -5,7 +5,6 @@ import Header from "@/components/Header";
 import ImageGallery from "@/components/ImageGallery";
 import ImageProcessor from "@/components/ImageProcessor";
 import Tutorial from "@/components/Tutorial";
-import { Link } from "react-router-dom";
 
 export default function Index() {
   return (
@@ -26,11 +25,6 @@ export default function Index() {
               <div className="flex flex-wrap items-center justify-center gap-4">
                 <Button asChild size="lg">
                   <a href="#processor">Try It Now</a>
-                </Button>
-                <Button asChild variant="outline" size="lg">
-                  <Link to="/enhanced-contours">
-                    Enhanced Algorithm
-                  </Link>
                 </Button>
               </div>
             </div>

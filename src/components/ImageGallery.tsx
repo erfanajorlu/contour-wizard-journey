@@ -8,39 +8,39 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layers, Eye, ArrowRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
-// Define sample datasets
+// Define sample datasets with high-contrast images better suited for contour detection
 const sampleDatasets = [
   {
-    id: 'basic-shapes',
-    name: 'Basic Shapes',
-    description: 'Simple geometric shapes with clear boundaries',
-    complexity: 'Low',
-    bestFor: 'Learning the basics of contour detection',
-    imageUrl: 'https://images.unsplash.com/photo-1630395822970-acd6a691d97e?w=500&auto=format&fit=crop&q=80'
+    id: 'medical-imaging',
+    name: 'Medical Imaging',
+    description: 'Medical scans with clear structures',
+    complexity: 'High',
+    bestFor: 'Medical contour detection',
+    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&fit=crop&q=80'
   },
   {
     id: 'household-objects',
     name: 'Household Objects',
-    description: 'Everyday items with distinctive contours',
+    description: 'Everyday items with distinct contours',
     complexity: 'Medium',
-    bestFor: 'Practicing real-world contour detection',
+    bestFor: 'Practicing object detection',
     imageUrl: 'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&fit=crop&q=80'
   },
   {
-    id: 'natural-scenes',
-    name: 'Natural Scenes',
-    description: 'Outdoor environments with organic shapes',
-    complexity: 'High',
-    bestFor: 'Advanced contour detection challenges',
-    imageUrl: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=500&auto=format&fit=crop&q=80'
+    id: 'architecture',
+    name: 'Architecture',
+    description: 'Buildings with clear geometric shapes',
+    complexity: 'Medium',
+    bestFor: 'Edge detection on structures',
+    imageUrl: 'https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&fit=crop&q=80'
   },
   {
-    id: 'medical-imaging',
-    name: 'Medical Imaging',
-    description: 'Simulated medical scans for analysis',
-    complexity: 'Very High',
-    bestFor: 'Specialized contour detection applications',
-    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&fit=crop&q=80'
+    id: 'simple-objects',
+    name: 'Simple Objects',
+    description: 'High-contrast objects for clear contours',
+    complexity: 'Low',
+    bestFor: 'Learning contour basics',
+    imageUrl: 'https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&fit=crop&q=80'
   }
 ];
 

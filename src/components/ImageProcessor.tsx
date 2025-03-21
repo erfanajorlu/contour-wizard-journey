@@ -16,366 +16,178 @@ const ImageProcessor = () => {
   const resultCanvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
+  // Improved image processing functions based on the Python example
   const convertToGrayscale = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
     const output = new Uint8ClampedArray(data.length);
 
-    let min = 255;
-    let max = 0;
     for (let i = 0; i < data.length; i += 4) {
       const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      min = Math.min(min, gray);
-      max = Math.max(max, gray);
-    }
-
-    const range = max - min;
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      const normalized = range === 0 ? gray : ((gray - min) / range) * 255;
-
-      output[i] = normalized;
-      output[i + 1] = normalized;
-      output[i + 2] = normalized;
+      output[i] = gray;
+      output[i + 1] = gray;
+      output[i + 2] = gray;
       output[i + 3] = 255;
     }
 
     return new ImageData(output, width, height);
   };
 
-  const applyGaussianBlur = (imageData: ImageData): ImageData => {
+  const applyAdaptiveThreshold = (imageData: ImageData): ImageData => {
     const { data, width, height } = imageData;
     const output = new Uint8ClampedArray(data.length);
+    const blockSize = 21; // Must be odd
+    const C = 5; // Constant subtracted from mean
+    const halfBlockSize = Math.floor(blockSize / 2);
 
-    const kernel = [
-      [1,  4,  6,  4,  1],
-      [4, 16, 24, 16,  4],
-      [6, 24, 36, 24,  6],
-      [4, 16, 24, 16,  4],
-      [1,  4,  6,  4,  1],
-    ];
-    const kernelSize = 5;
-    const kernelSum = 256;
-    const offset = Math.floor(kernelSize / 2);
+    // Helper function to compute index
+    const idx = (x: number, y: number) => (y * width + x) * 4;
 
-    for (let y = offset; y < height - offset; y++) {
-      for (let x = offset; x < width - offset; x++) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        // Calculate adaptive threshold for each pixel
         let sum = 0;
-        for (let ky = -offset; ky <= offset; ky++) {
-          for (let kx = -offset; kx <= offset; kx++) {
-            const idx = ((y + ky) * width + (x + kx)) * 4;
-            const weight = kernel[ky + offset][kx + offset];
-            sum += data[idx] * weight;
+        let count = 0;
+        
+        // Compute local mean
+        for (let dy = -halfBlockSize; dy <= halfBlockSize; dy++) {
+          for (let dx = -halfBlockSize; dx <= halfBlockSize; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              sum += data[idx(nx, ny)];
+              count++;
+            }
           }
         }
-        const outIdx = (y * width + x) * 4;
-        const value = sum / kernelSum;
-        output[outIdx] = value;
-        output[outIdx + 1] = value;
-        output[outIdx + 2] = value;
-        output[outIdx + 3] = 255;
+        
+        const mean = sum / count;
+        const threshold = mean - C;
+        
+        // Apply threshold (inverted as in the Python example)
+        const pixelValue = data[idx(x, y)] <= threshold ? 255 : 0;
+        const index = idx(x, y);
+        output[index] = pixelValue;
+        output[index + 1] = pixelValue;
+        output[index + 2] = pixelValue;
+        output[index + 3] = 255;
       }
     }
 
     return new ImageData(output, width, height);
   };
 
-  const applyCannyEdgeDetection = (imageData: ImageData): ImageData => {
-    const { data, width, height } = imageData;
+  const findContours = (binaryImageData: ImageData): number[][][] => {
+    const { data, width, height } = binaryImageData;
+    const visited = new Uint8Array(width * height);
+    const contours: number[][][] = [];
 
-    const sobelX = [
-      [-1, 0, 1],
-      [-2, 0, 2],
-      [-1, 0, 1],
-    ];
-    const sobelY = [
-      [-1, -2, -1],
-      [ 0,  0,  0],
-      [ 1,  2,  1],
-    ];
+    // Helper function to get pixel value at (x,y)
+    const getPixel = (x: number, y: number): number => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+      return data[(y * width + x) * 4] === 255 ? 1 : 0;
+    };
 
-    const mag = new Float32Array(width * height);
-    const dir = new Float32Array(width * height);
+    // Helper function to check if point is already visited
+    const isVisited = (x: number, y: number): boolean => {
+      return visited[y * width + x] === 1;
+    };
 
-    const getGray = (x: number, y: number) => data[(y * width + x) * 4];
+    // Mark a point as visited
+    const markVisited = (x: number, y: number): void => {
+      visited[y * width + x] = 1;
+    };
 
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        let gx = 0;
-        let gy = 0;
+    // Direction vectors for 8-connected neighborhood
+    const dx = [1, 1, 0, -1, -1, -1, 0, 1];
+    const dy = [0, -1, -1, -1, 0, 1, 1, 1];
 
-        for (let ky = -1; ky <= 1; ky++) {
-          for (let kx = -1; kx <= 1; kx++) {
-            const val = getGray(x + kx, y + ky);
-            gx += val * sobelX[ky + 1][kx + 1];
-            gy += val * sobelY[ky + 1][kx + 1];
-          }
-        }
-
-        const idx = y * width + x;
-        mag[idx] = Math.sqrt(gx * gx + gy * gy);
-        dir[idx] = Math.atan2(gy, gx);
-      }
-    }
-
-    const nms = new Float32Array(width * height);
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = y * width + x;
-        const angle = dir[idx];
-        const magnitude = mag[idx];
-
-        const degree = ((angle * 180) / Math.PI) % 180;
-        let neighbor1 = 0;
-        let neighbor2 = 0;
-
-        if ((degree >= 0 && degree < 22.5) || (degree >= 157.5 && degree < 180)) {
-          neighbor1 = mag[idx - 1];
-          neighbor2 = mag[idx + 1];
-        } else if (degree >= 22.5 && degree < 67.5) {
-          neighbor1 = mag[idx - width - 1];
-          neighbor2 = mag[idx + width + 1];
-        } else if (degree >= 67.5 && degree < 112.5) {
-          neighbor1 = mag[idx - width];
-          neighbor2 = mag[idx + width];
-        } else {
-          neighbor1 = mag[idx - width + 1];
-          neighbor2 = mag[idx + width - 1];
-        }
-
-        if (magnitude >= neighbor1 && magnitude >= neighbor2) {
-          nms[idx] = magnitude;
-        } else {
-          nms[idx] = 0;
-        }
-      }
-    }
-
-    const highThreshold = 50;
-    const lowThreshold = 20;
-
-    const edgeMap = new Uint8ClampedArray(width * height);
-
-    for (let i = 0; i < nms.length; i++) {
-      if (nms[i] >= highThreshold) {
-        edgeMap[i] = 2;
-      } else if (nms[i] >= lowThreshold) {
-        edgeMap[i] = 1;
-      } else {
-        edgeMap[i] = 0;
-      }
-    }
-
-    const directions = [
-      [-1, -1], [-1, 0], [-1, 1],
-      [0, -1],           [0, 1],
-      [1, -1],  [1, 0],  [1, 1],
-    ];
-
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = index(x, y);
-        if (edgeMap[idx] === 2) {
-          const stack = [[x, y]];
-          while (stack.length > 0) {
-            const [cx, cy] = stack.pop()!;
-            for (const [dx, dy] of directions) {
-              const nx = cx + dx;
-              const ny = cy + dy;
-              const nIdx = index(nx, ny);
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                if (edgeMap[nIdx] === 1) {
-                  edgeMap[nIdx] = 2;
-                  stack.push([nx, ny]);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    const outData = new Uint8ClampedArray(width * height * 4);
-    for (let i = 0; i < edgeMap.length; i++) {
-      const outIdx = i * 4;
-      if (edgeMap[i] === 2) {
-        outData[outIdx] = 0;
-        outData[outIdx + 1] = 0;
-        outData[outIdx + 2] = 0;
-        outData[outIdx + 3] = 255;
-      } else {
-        outData[outIdx] = 255;
-        outData[outIdx + 1] = 255;
-        outData[outIdx + 2] = 255;
-        outData[outIdx + 3] = 255;
-      }
-    }
-
-    // Helper function to convert x,y to array index
-    function index(x: number, y: number): number {
-      return y * width + x;
-    }
-
-    return new ImageData(outData, width, height);
-  };
-
-  const findStartPoints = (imageData: ImageData): [number, number][] => {
-    const { data, width, height } = imageData;
-    const startPoints: [number, number][] = [];
-    const visited = new Set<string>();
-
-    const minContourSize = Math.floor((width + height) / 100);
-
+    // Find starting points for contours (white pixels with black neighbors)
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const key = `${x},${y}`;
-        if (visited.has(key)) continue;
+        if (getPixel(x, y) === 1 && !isVisited(x, y)) {
+          // Found a potential contour starting point
+          const contour: number[][] = [];
+          let cx = x;
+          let cy = y;
+          let dir = 7; // Start direction (assuming we came from the right)
 
-        const idx = (y * width + x) * 4;
-        if (data[idx] === 0) {
-          let contourSize = 0;
-          const stack: [number, number][] = [[x, y]];
-          const tempVisited = new Set<string>();
+          do {
+            contour.push([cx, cy]);
+            markVisited(cx, cy);
 
-          while (stack.length > 0 && contourSize <= minContourSize) {
-            const [cx, cy] = stack.pop()!;
-            const cKey = `${cx},${cy}`;
-            if (tempVisited.has(cKey)) continue;
-            tempVisited.add(cKey);
-            contourSize++;
-
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const nx = cx + dx;
-                const ny = cy + dy;
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                  const nIdx = (ny * width + nx) * 4;
-                  if (data[nIdx] === 0 && !tempVisited.has(`${nx},${ny}`)) {
-                    stack.push([nx, ny]);
-                  }
-                }
+            // Find the next pixel in the contour
+            let found = false;
+            let newDir = (dir + 5) % 8; // Start looking at the leftmost direction relative to current direction
+            
+            for (let i = 0; i < 8; i++) {
+              const nx = cx + dx[newDir];
+              const ny = cy + dy[newDir];
+              
+              if (getPixel(nx, ny) === 1 && !isVisited(nx, ny)) {
+                cx = nx;
+                cy = ny;
+                dir = newDir;
+                found = true;
+                break;
               }
+              
+              newDir = (newDir + 1) % 8;
             }
-          }
-
-          if (contourSize > minContourSize) {
-            startPoints.push([x, y]);
-            tempVisited.forEach((p) => visited.add(p));
+            
+            if (!found) break;
+          } while (cx !== x || cy !== y);
+          
+          if (contour.length > 20) { // Filter out small contours
+            contours.push(contour);
           }
         }
       }
     }
 
-    return startPoints;
-  };
-
-  const traceContour = (
-    imageData: ImageData,
-    startX: number,
-    startY: number
-  ): number[][] => {
-    const { data, width, height } = imageData;
-    const visited = new Set<string>();
-    const contour: number[][] = [];
-
-    const directions = [
-      [-1,  0],
-      [-1, -1],
-      [ 0, -1],
-      [ 1, -1],
-      [ 1,  0],
-      [ 1,  1],
-      [ 0,  1],
-      [-1,  1],
-    ];
-
-    let currentX = startX;
-    let currentY = startY;
-    let dirIndex = 0;
-
-    do {
-      const key = `${currentX},${currentY}`;
-      if (!visited.has(key)) {
-        contour.push([currentX, currentY]);
-        visited.add(key);
-      }
-
-      let found = false;
-      let count = 0;
-
-      while (count < 8 && !found) {
-        const nextDir = (dirIndex + count) % 8;
-        const [dx, dy] = directions[nextDir];
-        const newX = currentX + dx;
-        const newY = currentY + dy;
-
-        if (
-          newX >= 0 &&
-          newX < width &&
-          newY >= 0 &&
-          newY < height &&
-          data[(newY * width + newX) * 4] === 0
-        ) {
-          currentX = newX;
-          currentY = newY;
-          dirIndex = (nextDir + 5) % 8;
-          found = true;
-        }
-        count++;
-      }
-
-      if (!found) break;
-    } while (currentX !== startX || currentY !== startY);
-
-    return contour;
-  };
-
-  const smoothContour = (contour: number[][], windowSize = 5): number[][] => {
-    const smoothed: number[][] = [];
-    const halfWindow = Math.floor(windowSize / 2);
-    const length = contour.length;
-    if (length === 0) return [];
-
-    for (let i = 0; i < length; i++) {
-      let sumX = 0;
-      let sumY = 0;
-      let count = 0;
-      for (let j = -halfWindow; j <= halfWindow; j++) {
-        const idx = (i + j + length) % length;
-        sumX += contour[idx][0];
-        sumY += contour[idx][1];
-        count++;
-      }
-      smoothed.push([
-        Math.round(sumX / count),
-        Math.round(sumY / count),
-      ]);
-    }
-    return smoothed;
+    return contours;
   };
 
   const drawContours = (
-    ctx: CanvasRenderingContext2D,
-    allContours: number[][][]
+    ctx: CanvasRenderingContext2D, 
+    contours: number[][][], 
+    fillColor: string = 'rgba(0, 200, 175, 0.5)',
+    strokeColor: string = 'rgb(0, 255, 0)'
   ) => {
-    ctx.strokeStyle = "#FF0000";
-    ctx.lineWidth = 2;
-
-    const filtered = allContours.filter((c) => c.length > 100);
-    filtered.sort((a, b) => b.length - a.length);
-    const maxContours = 50;
-    const toDraw = filtered.slice(0, maxContours);
-
-    toDraw.forEach((contour) => {
-      const smoothed = smoothContour(contour, 5);
+    // First draw the filled contours
+    ctx.fillStyle = fillColor;
+    
+    for (const contour of contours) {
+      if (contour.length < 3) continue;
+      
       ctx.beginPath();
-      for (let i = 0; i < smoothed.length; i++) {
-        const [x, y] = smoothed[i];
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      ctx.moveTo(contour[0][0], contour[0][1]);
+      
+      for (let i = 1; i < contour.length; i++) {
+        ctx.lineTo(contour[i][0], contour[i][1]);
       }
+      
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Then draw the outlines
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+    
+    for (const contour of contours) {
+      if (contour.length < 3) continue;
+      
+      ctx.beginPath();
+      ctx.moveTo(contour[0][0], contour[0][1]);
+      
+      for (let i = 1; i < contour.length; i++) {
+        ctx.lineTo(contour[i][0], contour[i][1]);
+      }
+      
       ctx.closePath();
       ctx.stroke();
-    });
+    }
   };
 
   const processImage = () => {
@@ -450,15 +262,16 @@ const ImageProcessor = () => {
       ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
 
       try {
+        // 1. Convert to grayscale
         let imageData = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
-        imageData = convertToGrayscale(imageData);
-
-        imageData = applyGaussianBlur(imageData);
-
-        imageData = applyCannyEdgeDetection(imageData);
-
-        ctx.putImageData(imageData, 0, 0);
-
+        const grayscaleData = convertToGrayscale(imageData);
+        ctx.putImageData(grayscaleData, 0, 0);
+        
+        // 2. Apply adaptive threshold (binarization)
+        const thresholdData = applyAdaptiveThreshold(grayscaleData);
+        ctx.putImageData(thresholdData, 0, 0);
+        
+        // Prepare the result canvas
         const resultCtx = resultCanvasRef.current!.getContext("2d");
         if (!resultCtx) {
           toast({
@@ -473,40 +286,26 @@ const ImageProcessor = () => {
         resultCanvasRef.current!.width = scaledWidth;
         resultCanvasRef.current!.height = scaledHeight;
         resultCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-
-        const startPoints = findStartPoints(imageData);
-        if (startPoints.length === 0) {
+        
+        // 3. Find and draw contours
+        const contours = findContours(thresholdData);
+        
+        if (contours.length === 0) {
           toast({
             title: "Processing result",
-            description: "No contours detected in the image.",
+            description: "No contours detected in the image. Try another image with clearer edges.",
             variant: "destructive"
           });
           setIsProcessing(false);
           return;
         }
-
-        const allContours = startPoints
-          .map(([x, y]) => {
-            const c = traceContour(imageData, x, y);
-            return c.length > 0 ? c : null;
-          })
-          .filter(Boolean) as number[][][];
-
-        if (allContours.length === 0) {
-          toast({
-            title: "Processing result",
-            description: "No valid contours found after tracing.",
-            variant: "destructive"
-          });
-          setIsProcessing(false);
-          return;
-        }
-
-        drawContours(resultCtx, allContours);
+        
+        // Draw contours on original image
+        drawContours(resultCtx, contours);
         
         toast({
           title: "Processing complete",
-          description: `Detected ${allContours.length} contours in the image.`,
+          description: `Detected ${contours.length} contours in the image.`,
           variant: "default"
         });
       } catch (error) {
@@ -566,12 +365,10 @@ const ImageProcessor = () => {
   };
 
   const sampleImages = [
-    "/assets/sample1.jpg",
-    "/assets/sample2.jpg",
-    "/assets/sample3.jpg",
+    "https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=500&auto=format&cors=1",
     "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=500&auto=format&cors=1",
-    "https://images.unsplash.com/photo-1583911860205-72f8ac8ddcbe?w=500&auto=format&cors=1",
-    "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1",
   ];
 
   const handleSampleImageClick = (imageUrl: string) => {
@@ -584,7 +381,7 @@ const ImageProcessor = () => {
         <h2 className="text-3xl font-bold text-center mb-8">Image Contour Detection</h2>
         <p className="text-center text-gray-600 mb-12 max-w-3xl mx-auto">
           Upload an image or select one of our samples to see the contour detection algorithm in action.
-          Our advanced algorithm uses edge detection and contour tracing to identify object boundaries.
+          Our algorithm uses adaptive thresholding and contour tracing to identify object boundaries.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -670,13 +467,13 @@ const ImageProcessor = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Edge Detection</p>
+                    <p className="text-sm font-medium">Threshold</p>
                     <div className="relative aspect-square w-full bg-gray-100 rounded-lg overflow-hidden">
                       <canvas ref={canvasRef} className="w-full h-full object-contain" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Contour Tracing</p>
+                    <p className="text-sm font-medium">Contour Detection</p>
                     <div className="relative aspect-square w-full bg-gray-100 rounded-lg overflow-hidden">
                       <canvas ref={resultCanvasRef} className="w-full h-full object-contain" />
                     </div>
