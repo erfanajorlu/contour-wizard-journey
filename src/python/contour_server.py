@@ -16,7 +16,6 @@ def detect_contours():
     # Get image data and parameters from the request
     data = request.json
     image_data = data.get('image')
-    threshold_value = int(data.get('threshold', 128))
     
     try:
         # Decode base64 image
@@ -24,7 +23,7 @@ def detect_contours():
         decoded_image = base64.b64decode(image_data)
         image = np.array(Image.open(io.BytesIO(decoded_image)))
         
-        # Convert to RGB if in BGR format (always ensure RGB for processing)
+        # Convert to RGB if in BGR format
         if len(image.shape) > 2 and image.shape[2] == 3:
             img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
@@ -32,16 +31,13 @@ def detect_contours():
             
         # Create a copy of the original image
         original = img.copy()
-            
+        
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) if len(img.shape) > 2 else img
             
-        # Apply Gaussian blur to reduce noise
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        
         # Apply adaptive threshold as in the sample code
         thresh = cv2.adaptiveThreshold(
-            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 5)
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 5)
         
         # Find contours using RETR_TREE for all contours including nested
         contours_tree, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
