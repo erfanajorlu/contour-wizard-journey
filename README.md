@@ -1,4 +1,4 @@
-# Welcome to Your Contour Based Algorithm Project
+# Welcome to Contour Based Algorithm Project
 
 ## Project Info
 
