@@ -32,7 +32,7 @@ export interface MedicalSample {
 
 class PythonContourService {
   private readonly apiUrl: string = 'http://localhost:5000/api';
-  private readonly fallbackMode: boolean = true; // Set to true as we're not using a real backend
+  private readonly fallbackMode: boolean = false; // Set to true as we're not using a real backend
 
   /**
    * Check if the service is running in fallback mode
