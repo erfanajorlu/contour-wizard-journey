@@ -35,6 +35,13 @@ class PythonContourService {
   private readonly fallbackMode: boolean = true; // Set to true as we're not using a real backend
 
   /**
+   * Check if the service is running in fallback mode
+   */
+  isFallbackMode(): boolean {
+    return this.fallbackMode;
+  }
+
+  /**
    * Process an image with the Python contour detection API
    */
   async detectContours(imageData: string, threshold: number): Promise<ContourResponse> {

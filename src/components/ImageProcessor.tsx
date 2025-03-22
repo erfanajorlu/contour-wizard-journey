@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +40,7 @@ const ImageProcessor = () => {
       // Call the Python contour detection service
       const results = await pythonContourService.detectContours(selectedImage, 128);
       
-      if (pythonContourService.fallbackMode) {
+      if (pythonContourService.isFallbackMode()) {
         // Since we're in fallback mode, we'll process the image locally
         processImageLocally(selectedImage);
       } else {
@@ -71,7 +70,6 @@ const ImageProcessor = () => {
     }
   };
 
-  // Fallback client-side processing when Python backend is not available
   const processImageLocally = (imageUrl: string) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
