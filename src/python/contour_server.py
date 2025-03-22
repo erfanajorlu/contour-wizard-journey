@@ -24,24 +24,55 @@ def detect_contours():
         decoded_image = base64.b64decode(image_data)
         image = np.array(Image.open(io.BytesIO(decoded_image)))
         
-        # Convert to grayscale if image is RGB
-        if len(image.shape) > 2:
-            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        # Convert to RGB if in BGR format
+        if len(image.shape) > 2 and image.shape[2] == 3:
+            img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
-            gray = image
+            img = image
             
-        # Apply Gaussian blur to reduce noise (optional)
+        # Create a copy of the original image
+        original = img.copy()
+            
+        # Convert to grayscale
+        if len(img.shape) > 2:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img
+            
+        # Apply Gaussian blur to reduce noise
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # Apply binary threshold
-        _, thresh = cv2.threshold(blurred, threshold_value, 255, cv2.THRESH_BINARY)
+        # Apply adaptive threshold as in the sample code
+        thresh = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 5)
         
-        # Find contours
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Find contours (RETR_TREE for all contours including nested)
+        contours_tree, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Convert contours to serializable format
+        # Create detected_contours visualization
+        detected_contours = original.copy()
+        cv2.drawContours(detected_contours, contours_tree, -1, (0, 255, 0), -1)
+        
+        # Find external contours
+        contours_external, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Create highlight visualization (colored contours)
+        highlight = np.ones_like(original)
+        cv2.drawContours(highlight, contours_external, -1, (0, 200, 175), cv2.FILLED)
+        
+        # Create mask and extract foreground
+        mask = np.zeros_like(original)
+        cv2.drawContours(mask, contours_external, -1, (255, 255, 255), cv2.FILLED)
+        foreground = cv2.bitwise_and(original, mask)
+        
+        # Convert all visualization images to base64
+        def img_to_base64(img):
+            _, buffer = cv2.imencode('.png', img)
+            return f'data:image/png;base64,{base64.b64encode(buffer).decode("utf-8")}'
+        
+        # Convert numpy serializable contour format for the response
         serialized_contours = []
-        for contour in contours:
+        for contour in contours_external:
             points = []
             for point in contour:
                 x, y = point[0]
@@ -51,31 +82,16 @@ def detect_contours():
                 "closed": True
             })
         
-        # Create visualizations
-        # 1. Grayscale image
-        _, grayscale_buffer = cv2.imencode('.png', gray)
-        grayscale_base64 = base64.b64encode(grayscale_buffer).decode('utf-8')
-        
-        # 2. Threshold image
-        _, threshold_buffer = cv2.imencode('.png', thresh)
-        threshold_base64 = base64.b64encode(threshold_buffer).decode('utf-8')
-        
-        # 3. Contour visualization
-        contour_image = np.zeros_like(image)
-        if len(contour_image.shape) == 2:
-            contour_image = cv2.cvtColor(contour_image, cv2.COLOR_GRAY2RGB)
-        
-        cv2.drawContours(contour_image, contours, -1, (0, 170, 255), 2)
-        _, contour_buffer = cv2.imencode('.png', contour_image)
-        contour_base64 = base64.b64encode(contour_buffer).decode('utf-8')
-        
         return jsonify({
             'contours': serialized_contours,
             'count': len(serialized_contours),
             'visualizations': {
-                'grayscale': f'data:image/png;base64,{grayscale_base64}',
-                'threshold': f'data:image/png;base64,{threshold_base64}',
-                'contour': f'data:image/png;base64,{contour_base64}'
+                'original': img_to_base64(original),
+                'detected_contours': img_to_base64(detected_contours),
+                'color_contours': img_to_base64(highlight),
+                'extract_contours': img_to_base64(foreground),
+                'grayscale': img_to_base64(gray),
+                'threshold': img_to_base64(thresh)
             }
         })
         

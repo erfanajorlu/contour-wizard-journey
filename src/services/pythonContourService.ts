@@ -15,9 +15,12 @@ export interface ContourResponse {
   contours: ContourData[];
   count: number;
   visualizations: {
+    original: string;
+    detected_contours: string;
+    color_contours: string;
+    extract_contours: string;
     grayscale: string;
     threshold: string;
-    contour: string;
   };
 }
 
@@ -37,13 +40,17 @@ class PythonContourService {
   async detectContours(imageData: string, threshold: number): Promise<ContourResponse> {
     if (this.fallbackMode) {
       console.warn('Running in fallback mode - Python backend not available');
+      // Return fallback data with sample images for all four visualizations
       return {
         contours: [],
         count: 0,
         visualizations: {
+          original: imageData, // Just use the input image as original
+          detected_contours: '',
+          color_contours: '',
+          extract_contours: '',
           grayscale: '',
-          threshold: '',
-          contour: ''
+          threshold: ''
         }
       };
     }
