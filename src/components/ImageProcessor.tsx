@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,24 +41,21 @@ const ImageProcessor = () => {
       // Call the Python contour detection service
       const results = await pythonContourService.detectContours(selectedImage, 128);
       
-      if (pythonContourService.isFallbackMode()) {
-        // Since we're in fallback mode, we'll process the image locally
-        processImageLocally(selectedImage);
-      } else {
-        // If we're using the Python backend, use its results
-        setProcessedResults({
-          original: results.visualizations.original || selectedImage,
-          detectedContours: results.visualizations.detected_contours,
-          colorContours: results.visualizations.color_contours,
-          extractContours: results.visualizations.extract_contours
-        });
-        
-        toast({
-          title: "Processing complete",
-          description: `Detected ${results.count} contours in the image.`,
-          variant: "default"
-        });
-      }
+      // Use the results directly, whether from Python backend or fallback
+      setProcessedResults({
+        original: results.visualizations.original || selectedImage,
+        detectedContours: results.visualizations.detected_contours,
+        colorContours: results.visualizations.color_contours,
+        extractContours: results.visualizations.extract_contours
+      });
+      
+      toast({
+        title: "Processing complete",
+        description: pythonContourService.isFallbackMode() 
+          ? "Image processed with client-side fallback (Python backend not available)." 
+          : `Detected ${results.count} contours in the image.`,
+        variant: "default"
+      });
     } catch (error) {
       console.error("Error processing image:", error);
       toast({
@@ -68,158 +66,6 @@ const ImageProcessor = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const processImageLocally = (imageUrl: string) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = imageUrl;
-    
-    img.onload = () => {
-      // Create temporary canvases for processing
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-      
-      if (!tempCtx) {
-        toast({
-          title: "Canvas error",
-          description: "Could not create canvas context.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Set canvas size to match image
-      const maxDimension = 800;
-      let scaledWidth = img.width;
-      let scaledHeight = img.height;
-
-      if (img.width > maxDimension || img.height > maxDimension) {
-        if (img.width > img.height) {
-          scaledWidth = maxDimension;
-          scaledHeight = (img.height * maxDimension) / img.width;
-        } else {
-          scaledHeight = maxDimension;
-          scaledWidth = (img.width * maxDimension) / img.height;
-        }
-      }
-      
-      tempCanvas.width = scaledWidth;
-      tempCanvas.height = scaledHeight;
-      
-      // Draw the original image
-      tempCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-      
-      // 1. Original Image (with proper size)
-      const originalCanvas = document.createElement('canvas');
-      originalCanvas.width = scaledWidth;
-      originalCanvas.height = scaledHeight;
-      const originalCtx = originalCanvas.getContext('2d');
-      originalCtx?.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-      const originalDataUrl = originalCanvas.toDataURL('image/png');
-      
-      // 2. Create a simple "detected contours" visualization (green filled contours)
-      const detectedCanvas = document.createElement('canvas');
-      detectedCanvas.width = scaledWidth;
-      detectedCanvas.height = scaledHeight;
-      const detectedCtx = detectedCanvas.getContext('2d');
-      
-      if (detectedCtx) {
-        // Draw original image first
-        detectedCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-        
-        // Apply a green filter for a simple "detected contours" effect
-        detectedCtx.fillStyle = 'rgba(0, 255, 0, 0.3)';
-        detectedCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-        
-        // Add some random "contour" shapes
-        detectedCtx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-        for (let i = 0; i < 5; i++) {
-          const x = Math.random() * scaledWidth;
-          const y = Math.random() * scaledHeight;
-          const radius = 20 + Math.random() * 50;
-          
-          detectedCtx.beginPath();
-          detectedCtx.arc(x, y, radius, 0, Math.PI * 2);
-          detectedCtx.fill();
-        }
-      }
-      const detectedDataUrl = detectedCanvas.toDataURL('image/png');
-      
-      // 3. Create "color contours" visualization (aqua colored areas)
-      const colorCanvas = document.createElement('canvas');
-      colorCanvas.width = scaledWidth;
-      colorCanvas.height = scaledHeight;
-      const colorCtx = colorCanvas.getContext('2d');
-      
-      if (colorCtx) {
-        // Fill with white background
-        colorCtx.fillStyle = 'white';
-        colorCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-        
-        // Add some colored "contour" areas
-        colorCtx.fillStyle = 'rgba(0, 200, 175, 0.7)';
-        for (let i = 0; i < 8; i++) {
-          const x = Math.random() * scaledWidth;
-          const y = Math.random() * scaledHeight;
-          const radius = 30 + Math.random() * 70;
-          
-          colorCtx.beginPath();
-          colorCtx.arc(x, y, radius, 0, Math.PI * 2);
-          colorCtx.fill();
-        }
-      }
-      const colorDataUrl = colorCanvas.toDataURL('image/png');
-      
-      // 4. Create an "extract contours" effect (only the main subject)
-      const extractCanvas = document.createElement('canvas');
-      extractCanvas.width = scaledWidth;
-      extractCanvas.height = scaledHeight;
-      const extractCtx = extractCanvas.getContext('2d');
-      
-      if (extractCtx) {
-        // Draw original image
-        extractCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-        
-        // Create a radial gradient mask from center
-        const gradient = extractCtx.createRadialGradient(
-          scaledWidth/2, scaledHeight/2, 0,
-          scaledWidth/2, scaledHeight/2, scaledWidth/2
-        );
-        gradient.addColorStop(0, 'white');
-        gradient.addColorStop(0.7, 'rgba(255,255,255,0.1)');
-        gradient.addColorStop(1, 'transparent');
-        
-        // Apply the mask
-        extractCtx.globalCompositeOperation = 'destination-in';
-        extractCtx.fillStyle = gradient;
-        extractCtx.fillRect(0, 0, scaledWidth, scaledHeight);
-      }
-      const extractDataUrl = extractCanvas.toDataURL('image/png');
-      
-      // Set all results
-      setProcessedResults({
-        original: originalDataUrl,
-        detectedContours: detectedDataUrl,
-        colorContours: colorDataUrl,
-        extractContours: extractDataUrl
-      });
-      
-      toast({
-        title: "Processing complete",
-        description: "Image processed with client-side fallback (Python backend not available).",
-        variant: "default"
-      });
-    };
-    
-    img.onerror = () => {
-      toast({
-        title: "Image loading error",
-        description: "Failed to load the image. Please try another one.",
-        variant: "destructive"
-      });
-      setIsProcessing(false);
-    };
   };
 
   useEffect(() => {

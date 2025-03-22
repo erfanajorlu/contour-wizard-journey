@@ -24,7 +24,7 @@ def detect_contours():
         decoded_image = base64.b64decode(image_data)
         image = np.array(Image.open(io.BytesIO(decoded_image)))
         
-        # Convert to RGB if in BGR format
+        # Convert to RGB if in BGR format (always ensure RGB for processing)
         if len(image.shape) > 2 and image.shape[2] == 3:
             img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
@@ -34,10 +34,7 @@ def detect_contours():
         original = img.copy()
             
         # Convert to grayscale
-        if len(img.shape) > 2:
-            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = img
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) if len(img.shape) > 2 else img
             
         # Apply Gaussian blur to reduce noise
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -46,18 +43,18 @@ def detect_contours():
         thresh = cv2.adaptiveThreshold(
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 5)
         
-        # Find contours (RETR_TREE for all contours including nested)
+        # Find contours using RETR_TREE for all contours including nested
         contours_tree, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Create detected_contours visualization
+        # Create detected_contours visualization (green filled contours)
         detected_contours = original.copy()
         cv2.drawContours(detected_contours, contours_tree, -1, (0, 255, 0), -1)
         
         # Find external contours
         contours_external, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Create highlight visualization (colored contours)
-        highlight = np.ones_like(original)
+        # Create highlight visualization (colored contours with aqua color)
+        highlight = np.ones_like(original) * 255  # White background
         cv2.drawContours(highlight, contours_external, -1, (0, 200, 175), cv2.FILLED)
         
         # Create mask and extract foreground
@@ -67,7 +64,9 @@ def detect_contours():
         
         # Convert all visualization images to base64
         def img_to_base64(img):
-            _, buffer = cv2.imencode('.png', img)
+            is_success, buffer = cv2.imencode('.png', img)
+            if not is_success:
+                return None
             return f'data:image/png;base64,{base64.b64encode(buffer).decode("utf-8")}'
         
         # Convert numpy serializable contour format for the response
