@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,12 +37,44 @@ const ImageProcessor = () => {
     setIsProcessing(true);
 
     try {
+      // Add error handling for the image format
+      if (!selectedImage.startsWith('data:image')) {
+        // If the image is a URL (not a data URL), fetch it and convert to base64
+        const response = await fetch(selectedImage, { mode: 'cors' });
+        const blob = await response.blob();
+        
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          await processImageData(base64data);
+        };
+      } else {
+        // Process data URL directly
+        await processImageData(selectedImage);
+      }
+    } catch (error) {
+      console.error("Error processing image:", error);
+      toast({
+        title: "Processing error",
+        description: `Error during image processing: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+    }
+  };
+
+  // New helper function to process image data
+  const processImageData = async (imageData: string) => {
+    try {
       // Call the Python contour detection service
-      const results = await pythonContourService.detectContours(selectedImage, 128);
+      const results = await pythonContourService.detectContours(imageData, 128);
       
       // Use the results directly, whether from Python backend or fallback
       setProcessedResults({
-        original: results.visualizations.original || selectedImage,
+        original: results.visualizations.original || imageData,
         detectedContours: results.visualizations.detected_contours,
         colorContours: results.visualizations.color_contours,
         extractContours: results.visualizations.extract_contours
