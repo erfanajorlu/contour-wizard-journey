@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Layers, Eye, ArrowRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
-// Define sample datasets with high-contrast images better suited for contour detection
 const sampleDatasets = [
   {
     id: 'portrait',
@@ -69,12 +68,12 @@ const ImageGallery = () => {
   };
   
   const handleTryImage = (dataset: typeof sampleDatasets[0]) => {
-    // Find the processor section and scroll to it
+    const cacheBustedUrl = `${dataset.imageUrl}${dataset.imageUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    
     const processorSection = document.getElementById('processor');
     if (processorSection) {
       processorSection.scrollIntoView({ behavior: 'smooth' });
       
-      // Set a timeout to allow scrolling to complete before showing the toast
       setTimeout(() => {
         toast({
           title: "Sample selected",
@@ -83,9 +82,8 @@ const ImageGallery = () => {
       }, 1000);
     }
     
-    // Create and dispatch a custom event with the image URL
     const event = new CustomEvent('sampleImageSelected', { 
-      detail: { imageUrl: dataset.imageUrl }
+      detail: { imageUrl: cacheBustedUrl }
     });
     document.dispatchEvent(event);
   };

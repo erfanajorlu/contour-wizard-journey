@@ -1,4 +1,3 @@
-
 // Service to communicate with the Python contour detection backend
 
 export interface ContourPoint {
@@ -32,7 +31,7 @@ export interface MedicalSample {
 
 class PythonContourService {
   private readonly apiUrl: string = 'http://localhost:5000/api';
-  private readonly fallbackMode: boolean = false; // Set to true as we're not using a real backend
+  private readonly fallbackMode: boolean = false; // As requested, set to false
 
   /**
    * Check if the service is running in fallback mode
@@ -82,7 +81,7 @@ class PythonContourService {
   private async simulatePythonProcessing(imageData: string): Promise<ContourResponse> {
     return new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      img.crossOrigin = "anonymous";  // Ensure crossOrigin is set for all image loading
       img.src = imageData;
       
       img.onload = () => {

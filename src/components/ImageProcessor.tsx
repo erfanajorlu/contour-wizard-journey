@@ -37,22 +37,29 @@ const ImageProcessor = () => {
     setIsProcessing(true);
 
     try {
-      // Add error handling for the image format
       if (!selectedImage.startsWith('data:image')) {
-        // If the image is a URL (not a data URL), fetch it and convert to base64
-        const response = await fetch(selectedImage, { mode: 'cors' });
-        const blob = await response.blob();
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = selectedImage;
         
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error("Failed to load image"));
+        });
         
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          await processImageData(base64data);
-        };
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          await processImageData(dataUrl);
+        } else {
+          throw new Error("Could not create canvas context");
+        }
       } else {
-        // Process data URL directly
         await processImageData(selectedImage);
       }
     } catch (error) {
@@ -66,13 +73,10 @@ const ImageProcessor = () => {
     }
   };
 
-  // New helper function to process image data
   const processImageData = async (imageData: string) => {
     try {
-      // Call the Python contour detection service
       const results = await pythonContourService.detectContours(imageData, 128);
       
-      // Use the results directly, whether from Python backend or fallback
       setProcessedResults({
         original: results.visualizations.original || imageData,
         detectedContours: results.visualizations.detected_contours,
@@ -100,7 +104,6 @@ const ImageProcessor = () => {
   };
 
   useEffect(() => {
-    // Listen for sample image selection from the gallery
     const handleSampleSelection = (event: CustomEvent) => {
       if (event.detail && event.detail.imageUrl) {
         setSelectedImage(event.detail.imageUrl);
@@ -134,16 +137,16 @@ const ImageProcessor = () => {
   };
 
   const sampleImages = [
-    "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1", // Portrait
-    "https://images.unsplash.com/photo-1575936123452-b67c3203c357?w=500&auto=format&cors=1", // High contrast face
-    "https://images.unsplash.com/photo-1611915387288-fd8d2f5f928b?w=500&auto=format&cors=1", // Simple shapes
-    "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?w=500&auto=format&cors=1", // Shoes
-    "https://images.unsplash.com/photo-1567225557594-88d73e55f2cb?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1575936123452-b67c3203c357?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1611915387288-fd8d2f5f928b?w=500&auto=format&cors=1",
+    "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?w=500&auto=format&cors=1",
     "https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=500&auto=format&cors=1",
   ];
 
   const handleSampleImageClick = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
+    const cacheBustedUrl = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    setSelectedImage(cacheBustedUrl);
   };
 
   return (
